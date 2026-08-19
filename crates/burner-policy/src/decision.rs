@@ -61,7 +61,7 @@ impl PlacementDecision {
 }
 
 /// Deserializes a JSON number into a `u64`, accepting either integer
-/// (`2`) or whole-valued float (`2.0`) JSON encodings -- a JS engine's
+/// (`2`) or whole-valued float (`2.0`) JSON encodings: a JS engine's
 /// `JSON.stringify` of an integer-valued `Number` is not guaranteed to
 /// omit the decimal point across every implementation, so this accepts
 /// both rather than rejecting a numerically-whole float. A genuine

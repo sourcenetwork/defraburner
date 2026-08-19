@@ -44,7 +44,7 @@ impl RunningCell {
 /// caller holding only a cloned `Arc<EmbeddedNode<EmbeddedStore>>` (e.g.
 /// `Supervisor::node_handle`) can call it without needing the whole
 /// `RunningCell` borrow (and, transitively, the supervisor lock) alive
-/// across the call -- the same shape the watchdog's own probe already
+/// across the call: the same shape the watchdog's own probe already
 /// uses. A synchronous, process-wide cached lookup on upstream's own side
 /// (`db::DB::list_collections`), so no `spawn_blocking` is needed.
 pub fn cell_collections(

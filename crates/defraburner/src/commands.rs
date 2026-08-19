@@ -1,7 +1,7 @@
 //! The admin command executor (console round, D25): the single-writer
 //! task that dequeues `SupervisorCommand`s from the gateway's admin
 //! handlers and carries them out, driven on `start.rs`'s `select!`
-//! alongside the watchdog and autoscaler loops -- never spawned (D12):
+//! alongside the watchdog and autoscaler loops: never spawned (D12):
 //! `ProvisionCells` reaches `Supervisor::provision` -> `cell::ignite`,
 //! whose returned future is not `Send` whenever libp2p is configured, so
 //! it can never run inside an axum handler's spawned task. Every
@@ -10,8 +10,8 @@
 //! control itself; `run` here is the only thing that ever dequeues one.
 //!
 //! Commands are processed strictly one at a time (a plain `while let`
-//! loop, never a per-command spawn), so every command -- and,
-//! transitively, every manifest read-modify-write it performs -- is
+//! loop, never a per-command spawn), so every command: and,
+//! transitively, every manifest read-modify-write it performs: is
 //! naturally serialized against every other admin command with zero
 //! extra locking discipline beyond `supervisor`'s own async `Mutex`.
 
@@ -29,7 +29,7 @@ use tokio::sync::{Mutex, mpsc};
 // No `use defra_http::P2POperations;` needed: every call below goes
 // through `p2p.ops(): &Arc<dyn defra_http::P2POperations>` (a trait
 // object), and Rust resolves trait-object method calls without the
-// trait itself being in scope -- unlike a generic `T: Trait` bound.
+// trait itself being in scope: unlike a generic `T: Trait` bound.
 // Mirrors `burner_mesh::static_peers`/`wiring`'s own P2P call sites,
 // verified there via `cargo check` flagging the explicit import as
 // unused.
@@ -115,7 +115,7 @@ async fn handle(
 /// Provisions `count` cells one at a time via `burner_policy::autoscaler`'s
 /// `execute_scale_up` (D25: the exact same lock-before-index-scan path
 /// the autoscaler's own scale-up uses, now genuinely multi-caller), never
-/// concurrently within one request -- keeping every id/port assignment
+/// concurrently within one request: keeping every id/port assignment
 /// strictly sequential is what makes the underlying `next_cell_index`
 /// scan race-free even under a `count > 1` request. Each attempt's
 /// outcome is independent: a failure partway through never rolls back
@@ -171,7 +171,7 @@ async fn load_tenant_collections(data_root: &Path, name: &str) -> Result<Vec<Str
 }
 
 /// Drops tenant `name` (D23): unsubscribes its collections on its cells
-/// (best-effort per cell -- a cell that has already gone away, or an
+/// (best-effort per cell: a cell that has already gone away, or an
 /// unsubscribe RPC that fails, must never block revoking the token,
 /// which is the operator-facing point of this command), removes its
 /// placement and the tenant record itself from the manifest, then, when

@@ -1,4 +1,4 @@
-# defraburner -- an afterburner-governed DefraDB cluster in one binary.
+# defraburner: an afterburner-governed DefraDB cluster in one binary.
 # `just start` is the front door: build it and land on the dashboard,
 # no arguments required.
 
@@ -133,7 +133,7 @@ setup:
     echo "setup: ready. next: just start"
 
 # THE front door: builds (release-fast: thin LTO, fast to rebuild, fast
-# enough to actually run) and runs `defraburner up` -- recovers the
+# enough to actually run) and runs `defraburner up`: recovers the
 # default data root if a cluster already lives there, else provisions a
 # fresh single cell, then prints the dashboard URL (with the admin token
 # already in it) and best-effort opens it in a browser. Zero-config
@@ -144,7 +144,7 @@ setup:
 # panic on its first run. Extra args pass straight through to `up`, e.g.
 # `just start --no-open` or `just start --cells 3`. RUST_LOG defaults to
 # keeping our own info logs while quieting dependency noise (libp2p,
-# hyper, tower, and libp2p_kad's own DHT routing chatter -- generically
+# hyper, tower, and libp2p_kad's own DHT routing chatter: generically
 # noisy in any small/isolated network, not specific to our tenant
 # replication groups); a caller-set RUST_LOG always wins.
 #
@@ -158,7 +158,7 @@ setup:
 # messages for a multi-cell cluster's real replication failures, and a
 # tracing target filter cannot distinguish "expected because this cell is
 # alone" from "concerning because it should have peers" by message
-# content -- quieting the target would hide the second case along with
+# content: quieting the target would hide the second case along with
 # the first, so all three stay at their default level. The dashboard's
 # mesh panel says plainly, in its cluster caption, that a single-cell
 # cluster does not replicate, so this noise reads correctly instead.
@@ -292,8 +292,8 @@ packages:
 # single-tenant default GCRA admission (200 req/s, burst 100), so loadgen's
 # 3-thread tight loop intentionally saturates that ceiling on both runs.
 # `err=` in each LOADGEN line is therefore mostly real 429 admission
-# rejects (expected, not a bug), and `p50_ms`/`p99_ms` -- the latency of
-# the requests that *were* admitted -- are the actual overhead signal this
+# rejects (expected, not a bug), and `p50_ms`/`p99_ms`: the latency of
+# the requests that *were* admitted: are the actual overhead signal this
 # recipe measures. Finishes by re-running the golden recovery test and
 # printing its RECOVERY timing lines.
 # Measure throughput, latency, and recovery timings.

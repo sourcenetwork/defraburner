@@ -70,7 +70,7 @@ async fn admin_set_autoscaler(
 
 /// `POST /admin/autoscaler/tick`: forces one tick outside the normal
 /// cadence. Acknowledges once the signal has been sent, not once the
-/// forced tick has actually finished running -- a tick's own work (a
+/// forced tick has actually finished running: a tick's own work (a
 /// live sync_status query per cell, a manifest load/save) should never
 /// gate this endpoint's response latency.
 async fn admin_force_tick(State(state): State<GatewayState>, headers: HeaderMap) -> Response {

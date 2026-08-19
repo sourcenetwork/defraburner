@@ -49,7 +49,7 @@ pub struct AutoscaleClampContext {
 
 /// Validates and clamps a raw [`AutoscaleDecision`] into a [`ClampedPlan`]
 /// of at most one [`ClampedAction::ScaleUp`] or
-/// [`ClampedAction::ScaleDown`] -- never both, and never more than one of
+/// [`ClampedAction::ScaleDown`]: never both, and never more than one of
 /// either: `AutoscaleDecision` carries a single `action`, not a list, so
 /// "at most one scale action per tick" is enforced by the decision type
 /// itself, not a runtime truncation here (see this module's tests for the
@@ -313,7 +313,7 @@ mod tests {
     #[test]
     fn at_most_one_scale_action_is_ever_produced_by_construction() {
         // AutoscaleDecision::action is a single ScaleAction, not a list,
-        // so this holds for every possible decision -- exercised across
+        // so this holds for every possible decision: exercised across
         // the full variant space rather than asserted once.
         for action in [
             ScaleAction::ScaleUp,

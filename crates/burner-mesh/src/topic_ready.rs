@@ -15,7 +15,7 @@ use tokio::time::Instant;
 /// on `node`, returning `Ok(true)`. A deadline elapsing without seeing it
 /// returns `Ok(false)`, not an error (D25 "the real bug" fix): the event
 /// is edge-triggered (see this comment's own race discussion below) and
-/// can be missed by nobody having listened yet -- most notably, upstream
+/// can be missed by nobody having listened yet: most notably, upstream
 /// silently restores a cell's subscriptions from disk at its own startup
 /// (`p2p::sync::coordinator::subscriptions`'s "Loading persisted P2P
 /// collections" log), before any caller here ever runs, so the join

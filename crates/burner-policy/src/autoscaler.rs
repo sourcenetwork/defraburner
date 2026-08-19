@@ -106,7 +106,7 @@ impl AutoscalerControl {
 
     /// Merges `patch` into the override layer, rejecting a patch whose
     /// resulting effective config would be nonsensical (min above max, a
-    /// zero min, or a zero tick interval -- `tokio::time::interval` panics
+    /// zero min, or a zero tick interval: `tokio::time::interval` panics
     /// on a zero period) before it ever takes effect.
     pub async fn apply_patch(&self, patch: AutoscalerPatch) -> std::result::Result<(), String> {
         let mut overrides = self.overrides.write().await;
@@ -237,7 +237,7 @@ fn lock_last_error(
 /// host-approved action that failed to actually run, e.g. a port
 /// conflict) are always logged (decision log + `tracing::error`)
 /// regardless of this outcome, but only a genuine [`StepOutcome::PolicyError`]
-/// -- the engine call or the decision parse itself failing -- affects
+///: the engine call or the decision parse itself failing -- affects
 /// [`PolicyStatusHandle`]: that status specifically answers "is the
 /// policy layer healthy", not "did every downstream action succeed".
 enum StepOutcome {
@@ -676,7 +676,7 @@ fn action_label(action: &ClampedAction) -> &'static str {
 }
 
 /// Cell ids assigned to no tenant, in manifest (provisioning) order, so
-/// `.last()` is the newest -- the ordering [`clamp::clamp_autoscale`]'s
+/// `.last()` is the newest: the ordering [`clamp::clamp_autoscale`]'s
 /// "newest first" scale-down rule relies on.
 fn free_cells_oldest_first(manifest: &ClusterManifest) -> Vec<String> {
     let assigned: std::collections::HashSet<&str> = manifest
@@ -697,7 +697,7 @@ fn free_cells_oldest_first(manifest: &ClusterManifest) -> Vec<String> {
 /// [`ClampedPlan`]'s single action type): a `Place` action only records
 /// the manifest's `cells` assignment; the actual schema+wire pass runs
 /// once, after every action in the plan is processed, via
-/// `burner_mesh::reconcile` (D14/D17: "reuse burner-mesh") -- so N
+/// `burner_mesh::reconcile` (D14/D17: "reuse burner-mesh"): so N
 /// placements in one tick cost one reconcile pass, not N.
 async fn execute_plan(
     plan: &ClampedPlan,

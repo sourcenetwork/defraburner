@@ -28,7 +28,7 @@ pub fn resolve_data_root(flag: Option<PathBuf>) -> Result<PathBuf> {
 
 /// Scans `[start, start + width)` for the first TCP port this host can
 /// currently bind on `127.0.0.1`, releasing the probe bind immediately
-/// (best-effort, not reserved -- matches the same convention every gate
+/// (best-effort, not reserved: matches the same convention every gate
 /// test's own `free_tcp_port` helper already uses). Fresh-provision only:
 /// a recovered cluster always reuses each cell's own recorded `p2p_port`
 /// from the manifest, never this scan.

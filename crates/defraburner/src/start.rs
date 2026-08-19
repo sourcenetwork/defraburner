@@ -76,8 +76,8 @@ pub async fn run(
     // provisioning) writes a manifest with a Pending tenant and zero
     // cells before `start` ever runs, and that must still take the
     // provision-fresh path (which itself loads and preserves that
-    // already-written manifest -- see `Supervisor::provision`'s
-    // `load_or_new_manifest` -- so the pending tenant is not lost).
+    // already-written manifest: see `Supervisor::provision`'s
+    // `load_or_new_manifest`: so the pending tenant is not lost).
     let existing_cells = if ClusterManifest::exists(&data_root) {
         ClusterManifest::load(&data_root)
             .await
@@ -287,7 +287,7 @@ pub async fn run(
     // Safe to `tokio::spawn` (D12): serving already-bound HTTP connections
     // never calls `cell::ignite`, so nothing on this path is the non-`Send`
     // future D12 guards against (unlike `watchdog.run`, which still cannot
-    // be spawned -- see its doc comment -- and stays a plain `select!`
+    // be spawned: see its doc comment -- and stays a plain `select!`
     // branch on this task for the same reason as before).
     let mut gateway_handle = tokio::spawn(burner_gateway::gateway::serve(
         gateway_listener,

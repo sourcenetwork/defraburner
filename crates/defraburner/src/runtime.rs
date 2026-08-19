@@ -29,7 +29,7 @@ pub struct RuntimeLimits {
 
 /// Builds the one afterburner engine this process uses for every policy
 /// package call: `Mode::Wasm` (D6, never native), `Manifold::sealed()`
-/// (no host capability grants at all -- policy packages are pure
+/// (no host capability grants at all: policy packages are pure
 /// `MetricsSnapshot -> Decision` functions, they need none), `limits`
 /// layered on top of afterburner's own defaults.
 ///

@@ -4,7 +4,7 @@
 //! `admin_cells`/`admin_tenants`/`admin_autoscaler` modules, all sharing
 //! this module's `GatewayState`, `send_supervisor_command` (both
 //! `pub(crate)`, not part of this crate's public API), and response
-//! helpers -- D25: "when two places must agree, they call one
+//! helpers: D25: "when two places must agree, they call one
 //! function").
 //!
 //! D12: [`build`]'s fallible setup (routing table, admin token, the
@@ -59,7 +59,7 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Per-(tenant, cell) latency counters: count, sum, and max, in
 /// microseconds. Honest minimal metrics (count+sum+max, not a full
-/// histogram) -- enough for Phase 4's snapshot pipeline to compute a mean
+/// histogram): enough for Phase 4's snapshot pipeline to compute a mean
 /// and a worst-case without this gateway pretending to a percentile
 /// breakdown it does not track.
 #[derive(Default)]
@@ -337,7 +337,7 @@ pub async fn build(
     // Safe to `tokio::spawn` (D12): only ever reads supervisor/manifest/
     // decision-log state, exactly like `admin_status` above; never reaches
     // `cell::ignite`. Outlives no explicit handle (dies with the process,
-    // same as any of axum's own per-connection tasks) -- there is nothing
+    // same as any of axum's own per-connection tasks): there is nothing
     // it holds that needs an orderly shutdown.
     tokio::spawn(run_sse_publisher(state.clone()));
 
@@ -362,7 +362,7 @@ pub async fn build(
 }
 
 /// Bounded range scanned for a free gateway port when `requested` is
-/// already taken (operator directive: "ports never block startup" -- a
+/// already taken (operator directive: "ports never block startup": a
 /// second `up`, against a different data root, must come up alongside a
 /// first one already holding the default port). Unlike
 /// `defraburner::up::find_free_port`'s best-effort probe-then-release
@@ -440,7 +440,7 @@ const SSE_OVERVIEW_INTERVAL: Duration = Duration::from_secs(1);
 struct SseOverviewPayload {
     /// The latest known autoscaler tick (the autoscaler's own
     /// `PolicyStatusHandle::last_ok_tick`, or `0` before any tick has
-    /// completed -- an honest "not yet", never omitted): every SSE event
+    /// completed: an honest "not yet", never omitted): every SSE event
     /// type carries a `tick` field, matching `DecisionLogEntry`'s own.
     tick: u64,
     overview: AdminStatusResponse,
@@ -457,8 +457,8 @@ async fn run_sse_publisher(state: GatewayState) {
 
     // The first tick fires immediately; skip it (mirrors
     // `burner_cell::watchdog::Watchdog::run`'s own doc comment on the same
-    // point) so this task's first real work -- a supervisor lock
-    // acquisition plus a live `sync_status` query per cell -- lands one
+    // point) so this task's first real work: a supervisor lock
+    // acquisition plus a live `sync_status` query per cell: lands one
     // interval after the gateway starts, not the instant `build` spawns
     // it. `build` spawns this before `start.rs` itself still has to
     // acquire that same supervisor lock to snapshot `connected_peers` for
@@ -532,7 +532,7 @@ struct CellDetail {
 /// confirmed via an observed topic-join event in this process (D25 "the
 /// real bug" fix): consumed by the dashboard's mesh panel to distinguish
 /// a link with positive evidence of being broken ("missing", dashed) from
-/// one simply never observed either way ("unconfirmed", dotted) -- see
+/// one simply never observed either way ("unconfirmed", dotted): see
 /// `burner_mesh::wiring::wire_group`'s doc comment. Collection-agnostic
 /// by design: a tenant's whole cell group confirms every collection
 /// together in one batch, so which specific collection a triple names
@@ -683,7 +683,7 @@ async fn admin_status(State(state): State<GatewayState>, headers: HeaderMap) -> 
 /// `auth_middleware`, which treats any Bearer value that fails JWT
 /// parsing as an invalid identity token and rejects with 403 (verified:
 /// `defradb.rs/crates/http/src/identity_extractor.rs:169-171`, matching
-/// Go DefraDB's own behavior) -- an entirely different, cell-local
+/// Go DefraDB's own behavior): an entirely different, cell-local
 /// identity system this gateway's tenant tokens were never meant to
 /// satisfy. Stripping it leaves that request anonymous to the cell (the
 /// same as any of this codebase's own direct, header-free `node.execute`

@@ -20,7 +20,7 @@
 //! &Arc<dyn defra_http::P2POperations>`).
 //!
 //! Route families that need components `embedded::build_with_store`
-//! never constructs at all (D8) -- `rest`, `manage`, `acp`, `index`,
+//! never constructs at all (D8): `rest`, `manage`, `acp`, `index`,
 //! `encrypted_index`, `backup`, `block`, `browser_sync`, `schema`,
 //! `lens`, `collection_mgmt`, `doc_acp`, `view`, `dump`, `txn_ops` --
 //! are still *mounted* by `Server::router()` (it builds every route

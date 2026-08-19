@@ -2,7 +2,7 @@
 //! policy, and `placement_input`, the smaller per-tick input built for
 //! the placement policy. Gateway-owned metrics (per-cell request
 //! counters, per-tenant admission counters) are not read directly here --
-//! `burner-policy` does not depend on `burner-gateway` -- they arrive as
+//! `burner-policy` does not depend on `burner-gateway`: they arrive as
 //! plain [`GatewayMetrics`] data the caller (`defraburner`'s `start.rs`)
 //! gathers each tick and passes in.
 
@@ -70,7 +70,7 @@ pub struct CellSnapshot {
     /// check reads exactly this per-cell `qps` signal (unchanged from
     /// Phase 0's spike contract; the crate's `engine.rs` EARLY
     /// VERIFICATION test proves the AOT-precompiled package still honors
-    /// it) -- omitting it would leave the default policy permanently
+    /// it): omitting it would leave the default policy permanently
     /// blind. 0.0 for a cell observed for the first time (no prior
     /// sample), honestly, not a fabricated rate.
     pub qps: f64,
@@ -353,7 +353,7 @@ impl MetricsSnapshot {
 /// serves (v1 disjoint placement means this is always 0 or 1, but it is
 /// computed as a real count, not a bool, so a later phase allowing
 /// shared-cell density can widen what it means without changing this
-/// function's contract -- mirrors `burner-mesh`'s own
+/// function's contract: mirrors `burner-mesh`'s own
 /// `placement::place` doc comment on the same point).
 #[derive(Debug, Clone, Serialize)]
 pub struct PlacementInput {

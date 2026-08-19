@@ -2,7 +2,7 @@
 //! assets (Phase 5, rebuilt in the console round, D23/D24/D25 to the
 //! imported DNA design). No build step: every CSS/JS/font file under
 //! `assets/` is embedded verbatim via `include_str!`/`include_bytes!` and
-//! served as-is -- zero runtime file reads, zero external network
+//! served as-is: zero runtime file reads, zero external network
 //! requests, zero external product names outside `design/dna/` (the
 //! reference material, never shipped).
 //!
@@ -16,7 +16,7 @@
 //! D17b/D24: no remote font import. Newsreader, IBM Plex Sans, and
 //! JetBrains Mono are self-hosted latin-subset variable woff2 files under
 //! `assets/fonts/`, declared by `app.css`'s own `@font-face` rules
-//! pointing at `/dashboard/assets/fonts/*` -- never Google Fonts or any
+//! pointing at `/dashboard/assets/fonts/*`: never Google Fonts or any
 //! other remote origin, so the dashboard renders identically offline.
 //!
 //! One wildcard route (`/dashboard/assets/{*path}`) claims the entire
@@ -26,7 +26,7 @@
 //! `.merge()`s this crate's router into the same flat router as the
 //! tenant-routing fallback (`route_to_tenant`), so any path this crate
 //! does *not* claim falls through to that fallback, which checks for a
-//! bearer token before it ever gets to say "not found" -- a confusing 401
+//! bearer token before it ever gets to say "not found": a confusing 401
 //! instead of a clean 404. Claiming the whole prefix means an unknown or
 //! removed asset (D24 deleted `sora-var.woff2`/`inter-var.woff2`) 404s
 //! from *this* router's own table lookup, honestly, rather than being
@@ -234,7 +234,7 @@ mod tests {
 
     /// D24: deleted fonts must 404 from this router's own table, not fall
     /// through to the gateway's tenant-auth fallback (which would 401 on
-    /// a missing bearer token -- see the module doc comment).
+    /// a missing bearer token: see the module doc comment).
     #[tokio::test]
     async fn a_removed_or_unknown_asset_404s_cleanly() {
         for path in [
@@ -329,8 +329,8 @@ mod tests {
     }
 
     /// Visual pass, TESTS requirement (source-level half; the live half
-    /// -- does `/admin/api/overview` actually carry these fields against
-    /// a real running gateway -- is
+    ///: does `/admin/api/overview` actually carry these fields against
+    /// a real running gateway: is
     /// `console_coverage::overview_payload_carries_every_field_the_mesh_panel_needs`,
     /// since this crate has no dependency on burner-gateway to call it
     /// directly). This much is still worth asserting here: it catches

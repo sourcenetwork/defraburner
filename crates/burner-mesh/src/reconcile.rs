@@ -68,7 +68,7 @@ impl TenantOutcome {
 ///
 /// - `Pending`: placed (`placement::place` picks free cells), schema'd
 ///   (`add_schema` from the tenant's stored SDL), wired
-///   (`wiring::wire_group`), then flipped to `Placed` and saved -- but
+///   (`wiring::wire_group`), then flipped to `Placed` and saved: but
 ///   only on full success; a failure at any step leaves the tenant
 ///   `Pending` (no cells committed) with its failure recorded in
 ///   `health`, rather than a half-placed tenant.
@@ -76,7 +76,7 @@ impl TenantOutcome {
 ///   (a missing cell degrades the tenant, naming it, rather than hanging
 ///   the whole pass on a dead peer), then re-wired (idempotent; see
 ///   `wiring::wire_group`'s doc comment). Its existing `cells`/`status`
-///   are never touched by a re-wiring failure -- only `health` changes,
+///   are never touched by a re-wiring failure: only `health` changes,
 ///   since the placement itself already succeeded in an earlier pass.
 ///
 /// The outer `Result::Err` is reserved for setup failures before any
@@ -162,10 +162,10 @@ async fn reconcile_pending(
     for cell in &cells {
         // Idempotent ENSURE, not a bare call (bug-fix round, D25
         // addendum): a tenant recreated under the same name after a
-        // plain drop (which keeps data, by design -- D23) lands back on
+        // plain drop (which keeps data, by design: D23) lands back on
         // a cell whose local schema was never removed, so a repeat
         // `add_schema` for the identical collections fails loudly with
-        // upstream's `CollectionAlreadyExists` -- observed live,
+        // upstream's `CollectionAlreadyExists`: observed live,
         // recreating "acme-co" with the same schema 500'd. Checked
         // directly against the node's own collection list (the same
         // synchronous `get_collection` lookup
@@ -207,10 +207,10 @@ async fn reconcile_pending(
 /// The `Placed` branch of one tenant's reconcile attempt: verify its
 /// assigned cells are actually running (bug 3: a missing cell degrades
 /// the tenant, naming it, instead of hanging the whole pass on a dead
-/// peer), then re-wire via [`ensure_group_connected`] -- connectivity
+/// peer), then re-wire via [`ensure_group_connected`]: connectivity
 /// confirmed, `add_collections` re-issued (idempotent), but never a wait
 /// on a topic-join event (D25 "the real bug" fix: see that function's own
-/// doc comment for why that event cannot be observed here -- upstream
+/// doc comment for why that event cannot be observed here: upstream
 /// already restored the subscription from disk at its own startup,
 /// before this call ever runs). A cell that cannot be positively
 /// confirmed connected is the real, observable problem this branch still

@@ -78,7 +78,7 @@ const CONNECT_CONFIRM_POLL_STEP: Duration = Duration::from_millis(100);
 /// on an already-subscribed collection means no new gossipsub SUBSCRIBE
 /// message is sent, so no new `TopicPeerEvent` fires, so a wait joined
 /// against that particular repeat call finds nothing to wait for and
-/// times out waiting for an event that will never re-arrive -- observed
+/// times out waiting for an event that will never re-arrive: observed
 /// live: creating a tenant while an unrelated, already-`Placed` tenant's
 /// re-wiring hit exactly this, aborting the new tenant's creation with a
 /// 500 that named a completely different tenant.
@@ -96,11 +96,11 @@ const CONNECT_CONFIRM_POLL_STEP: Duration = Duration::from_millis(100);
 /// gap this function alone cannot close, so it is no longer this
 /// function's job to try. A wait that times out here is NOT a failure:
 /// `add_collections` below already ran to completion regardless (they are
-/// joined, not sequenced -- see above), so the subscription is
+/// joined, not sequenced: see above), so the subscription is
 /// established either way, and the triple is simply left out of
 /// `confirmed_topic_joins` (unconfirmed, not broken) instead of failing
-/// the whole tenant. Only a genuine error -- a collection missing
-/// locally, the event bus itself going away -- still fails this call.
+/// the whole tenant. Only a genuine error: a collection missing
+/// locally, the event bus itself going away: still fails this call.
 /// Callers only ever reach here for a genuinely fresh placement in this
 /// process (`reconcile::reconcile`'s `Pending` branch): an already-
 /// `Placed` tenant (any later reconcile, including recovery after a
@@ -108,7 +108,7 @@ const CONNECT_CONFIRM_POLL_STEP: Duration = Duration::from_millis(100);
 /// on this event at all, because upstream restores a cell's subscriptions
 /// from disk at its own startup, before reconcile ever runs
 /// (`p2p::sync::coordinator::subscriptions`'s "Loading persisted P2P
-/// collections" log fires on every recovered cell) -- the join already
+/// collections" log fires on every recovered cell): the join already
 /// happened, with nobody listening, and the edge-triggered event that
 /// would prove it will not fire again. Waiting on it there is not
 /// narrowing a race, it is waiting on an event that cannot ever arrive.
@@ -145,7 +145,7 @@ pub async fn wire_group(
     // Each step tags its own outcome (`StepOutcome`) instead of sharing
     // one uniform `Result<()>`, so a wait's timeout and a real
     // `add_collections` failure can be told apart after `join_all` below
-    // -- but they stay in ONE `Vec`, wait-steps listed before add-steps
+    //: but they stay in ONE `Vec`, wait-steps listed before add-steps
     // exactly as before, so the polling-order guarantee above (every
     // wait's subscribe completes before any `add_collections` is polled
     // at all) is unchanged: it depends only on position within a single
@@ -236,7 +236,7 @@ pub async fn wire_group(
 /// upstream no-ops an already-connected dial), positively CONFIRMS that
 /// connectivity via a deadline-polled `connected_peers` read rather than
 /// trusting `connect_peer`'s own `Ok(())` alone, then issues
-/// `add_collections` on every cell (idempotent -- see `wire_group`'s doc
+/// `add_collections` on every cell (idempotent: see `wire_group`'s doc
 /// comment for the verified upstream source lines). Deliberately never
 /// waits on a topic-join event: see `wire_group`'s doc comment for why
 /// that wait is unobservable here specifically. A cell that cannot be
@@ -289,7 +289,7 @@ pub async fn ensure_group_connected(cells: &[&RunningCell], collections: &[Strin
 }
 
 /// One cell's `add_collections` call: idempotent (`Ok(false)`, not an
-/// error, on an already-subscribed collection -- see `wire_group`'s doc
+/// error, on an already-subscribed collection: see `wire_group`'s doc
 /// comment for the verified upstream source lines), shared by
 /// [`wire_group`] and [`ensure_group_connected`] so the two call sites
 /// cannot drift on it.

@@ -128,7 +128,7 @@ struct CellInspectResponse {
     /// storage gauge. Named plainly, not "storage_limit": this is a
     /// memory-cache-sizing knob, not a disk quota (v1 has no storage
     /// cap), so the gauge that divides `storage_bytes` by this is an
-    /// informational reference, not a real capacity percentage -- the UI
+    /// informational reference, not a real capacity percentage: the UI
     /// says so rather than implying a hard ceiling that does not exist.
     mem_budget_bytes: u64,
     watchdog: burner_cell::CellHealth,
@@ -368,7 +368,7 @@ mod tests {
 
     /// Completeness contract (operator directive): a successful inspect
     /// carries every documented key, not just the ones a particular
-    /// backend happens to populate -- proven against a real, ignited
+    /// backend happens to populate: proven against a real, ignited
     /// cell in-process (mirrors `admin_tenants.rs`'s own
     /// `admin_create_tenant_rolls_back_on_reconcile_failure`, the
     /// established pattern for a real-cell test here), not a mock.

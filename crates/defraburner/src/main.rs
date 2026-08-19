@@ -204,7 +204,7 @@ enum TenantCommand {
 /// distinct from the `-h`/`--help` flags handled separately below.
 const KNOWN_SUBCOMMANDS: &[&str] = &["up", "start", "status", "tenant", "help"];
 /// Flags that must reach clap completely unmodified so the *root*
-/// help/version text prints -- splicing `"up"` in front of `--help`
+/// help/version text prints: splicing `"up"` in front of `--help`
 /// would print `up`'s own help instead of the subcommand list.
 const HELP_VERSION_FLAGS: &[&str] = &["-h", "--help", "-V", "--version"];
 

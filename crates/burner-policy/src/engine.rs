@@ -22,7 +22,7 @@ use afterburner::{Afterburner, ScriptId};
 use anyhow::{Context, Result, anyhow, bail};
 
 /// Wasm target string afterburner's precompiled loader expects for a
-/// sealed, self-contained Javy WASI module (D9) -- not the
+/// sealed, self-contained Javy WASI module (D9): not the
 /// dynamically-linked `"wasm32-wasip1-dyn"` variant.
 const PRECOMPILED_TARGET: &str = "wasm32-wasip1";
 
@@ -56,7 +56,7 @@ pub struct RegisteredPackage {
 /// The name -> registered-script-id table for every policy package this
 /// process knows about, hosted on a shared afterburner engine handle it
 /// does not own the lifecycle of (the engine is built once, in
-/// `defraburner::runtime`, and handed in here -- see that module's doc
+/// `defraburner::runtime`, and handed in here: see that module's doc
 /// comment for why engine construction moved out of this crate).
 #[derive(Debug)]
 pub struct PolicyEngine {
@@ -67,7 +67,7 @@ pub struct PolicyEngine {
 impl PolicyEngine {
     /// Registers the two embedded default policies on `engine`, then
     /// applies `packages_dir`'s override archives (if given). Fails
-    /// loudly on a missing, ambiguous, or corrupt override -- a bad
+    /// loudly on a missing, ambiguous, or corrupt override: a bad
     /// `--packages-dir` is a startup configuration error, never a silent
     /// fallback to the default.
     pub fn load(packages_dir: Option<&Path>, engine: Arc<Afterburner>) -> Result<Self> {
@@ -160,7 +160,7 @@ fn register(
 
 /// Scans `packages_dir` for per-package override directories: each direct
 /// subdirectory containing exactly one `*.afb` file is extracted and
-/// registered under that subdirectory's own name -- the override key is
+/// registered under that subdirectory's own name: the override key is
 /// the directory name, never the name recorded inside the archive's own
 /// `afb.toml`. This is what lets `tests/policy_safety.rs` swap in a
 /// differently-named test fixture by laying its `.afb` out under a
@@ -266,7 +266,7 @@ mod tests {
 
     /// A minimal wasm-mode engine for this module's own tests. Production
     /// callers build their one shared engine via `defraburner::runtime`
-    /// (which this crate cannot depend on -- that would be the dependency
+    /// (which this crate cannot depend on: that would be the dependency
     /// cycle the other direction); this mirrors that same
     /// `Afterburner::builder().mode(Mode::Wasm).build()` call for
     /// test-only purposes.

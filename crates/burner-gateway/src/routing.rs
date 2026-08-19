@@ -18,7 +18,7 @@ use crate::router_build::build_cell_router;
 
 /// One tenant's resolved routing entry: its current token digest (so a
 /// stale cached mapping from before a token rotation can be detected and
-/// rejected) and its group's cell ids in placement order -- the order
+/// rejected) and its group's cell ids in placement order: the order
 /// `sticky_index` indexes into.
 #[derive(Debug, Clone)]
 struct TenantRoute {
@@ -60,8 +60,8 @@ impl RoutingTable {
     /// A genuine rebuild, not a monotonic union (D25/D23): any `tenants`/
     /// `tokens` entry left over from a *previous* rebuild but absent (or
     /// no longer token+cells-routable) from this one is dropped. Without
-    /// this, a dropped tenant's already-cached `TenantRoute` -- whose
-    /// `token_sha256` still matches its now-revoked token -- would keep
+    /// this, a dropped tenant's already-cached `TenantRoute`: whose
+    /// `token_sha256` still matches its now-revoked token: would keep
     /// satisfying `resolve_tenant`'s own "re-check against the tenant's
     /// current digest" defense forever, since there would be no fresher
     /// manifest entry to ever overwrite it with. `routers` (cell id ->
@@ -222,7 +222,7 @@ mod tests {
     fn sticky_index_varies_with_the_token() {
         // Not a strict requirement (a hash collision is legal), but with
         // a reasonable cell count and a handful of distinct tokens, at
-        // least one pair should land on different cells -- proving this
+        // least one pair should land on different cells: proving this
         // is not silently constant-zero for every input.
         let picks: std::collections::HashSet<usize> = (0..16)
             .map(|i| sticky_index(&format!("token-{i}"), 4))

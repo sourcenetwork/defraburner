@@ -70,8 +70,8 @@ pub struct DropTenantOutcome {
     pub retired_cells: Vec<String>,
 }
 
-/// Why a command targeting one existing tenant by name -- `DropTenant`,
-/// `RotateTenantToken`, `SetTenantAdmission` -- could not complete. Shared
+/// Why a command targeting one existing tenant by name: `DropTenant`,
+/// `RotateTenantToken`, `SetTenantAdmission`: could not complete. Shared
 /// across all three: every tenant-targeting command needs to name "not
 /// found" distinctly (404) from any other failure (500), and nothing else
 /// separates their error shapes.
@@ -85,11 +85,11 @@ pub enum TenantCommandError {
 
 /// A live autoscaler-config change (console round, D23): every field
 /// absent means "leave this knob as it is"; `paused` is the one exception
-/// -- when present it always takes effect (there is no partial-pause).
+///: when present it always takes effect (there is no partial-pause).
 /// Deserialized directly from a `PUT /admin/autoscaler` body, which is
 /// expected to name only the fields it wants to change: `#[serde(default)]`
 /// at the container level (not just on each field) is required here, not
-/// a nicety -- serde does not default a missing `Option<T>` field to
+/// a nicety: serde does not default a missing `Option<T>` field to
 /// `None` on its own; without this, `{"paused": true}` alone would fail
 /// deserialization with "missing field `min_cells`".
 #[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
