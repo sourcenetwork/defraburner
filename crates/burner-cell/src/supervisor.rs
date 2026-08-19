@@ -19,11 +19,21 @@ use crate::spec::{BackendKind, CellSpec};
 /// this many cells in flight at once.
 const RECOVERY_CONCURRENCY: usize = 4;
 
-/// Schema and query for the `BurnerMarker` recovery marker: proof that a
-/// cell's data survived a restart (including SIGKILL). Written once at
-/// provision, read back at recovery and by the watchdog's liveness probe.
-const MARKER_SDL: &str = "type BurnerMarker { cell_id: String }";
-const MARKER_QUERY: &str = "query { BurnerMarker { cell_id } }";
+/// Store key under which a cell records its own id: proof that the cell's
+/// data survived a restart (including SIGKILL). Written once at provision,
+/// read back at recovery and by the watchdog's liveness probe.
+///
+/// Deliberately a raw systemstore key, not a document in a collection.
+/// The marker is local bookkeeping that no peer ever subscribes to, but
+/// every document write goes through the merge layer's gossip
+/// broadcaster: on a cell with no peers for that collection the publish
+/// fails with `InsufficientPeers` and upstream retries it forever, so a
+/// marker document produced a permanent per-cell ERROR storm in the log
+/// (one immortal retry loop per marker ever written, replayed from the
+/// store on every start). A raw key proves exactly the same thing (the
+/// store opened, replayed its WAL, and still holds what it was given)
+/// while never entering the replication path at all.
+const MARKER_KEY: &[u8] = b"__defraburner_cell_marker__";
 
 /// Owns every cell this process has ignited.
 pub struct Supervisor {
@@ -153,7 +163,7 @@ impl Supervisor {
     /// `get_identity` / `resolve_signing_config[_with_flag]` /
     /// `find_remote_signer_did` call sites found the registry read only
     /// from `cli`, `defra-node`, `ffi`, `http` (all request-time DID
-    /// lookups) and `sourcehub` -- never from `db`, `query`, `p2p`,
+    /// lookups) and `sourcehub`: never from `db`, `query`, `p2p`,
     /// `db-merge`, or `storage`. The bare `embedded::EmbeddedNode` path this
     /// crate uses (`execute()` / `add_schema()`, no `defra_http` server, no
     /// FFI) never triggers any of those call sites; the mutation-time
@@ -192,7 +202,7 @@ impl Supervisor {
     /// left in place: a future scale-up always picks a fresh,
     /// never-before-used cell id (see `burner-policy`'s
     /// `autoscaler::next_cell_index`, which scans for exactly this), so a
-    /// lingering old directory is inert, not a hazard -- and leaving it
+    /// lingering old directory is inert, not a hazard: and leaving it
     /// avoids ever risking a real data-loss bug on an automated path.
     pub async fn remove_cell(&mut self, id: &str, delete_data: bool) -> Result<(), DrainCellError> {
         let entry = self.cells.get(id).ok_or(DrainCellError::NotFound)?;
@@ -439,7 +449,7 @@ impl Supervisor {
     /// join this process has confirmed so far. Cloned out (not borrowed)
     /// specifically so a caller (`burner_mesh::reconcile`) can hold it
     /// independently of `self` while it also holds cells borrowed from
-    /// `self.running_cell`/`node_handle` -- those two borrows would
+    /// `self.running_cell`/`node_handle`: those two borrows would
     /// otherwise conflict with taking `&mut self` to record new
     /// confirmations after wiring completes. Bounded by cluster size x
     /// collections x replication factor, tiny in practice; this is an
@@ -452,7 +462,7 @@ impl Supervisor {
 
     /// Merges newly-confirmed topic joins back in (monotonic: this set
     /// only ever grows for the life of the process, mirroring the real
-    /// fact it tracks -- a gossipsub subscription, once joined, stays
+    /// fact it tracks: a gossipsub subscription, once joined, stays
     /// joined until the cell is drained/re-ignited).
     pub fn merge_confirmed_topic_joins(
         &mut self,
@@ -484,13 +494,13 @@ async fn ignite_and_verify(data_root: &Path, spec: CellSpec) -> Result<CellEntry
     if !marker_ok {
         tracing::error!(
             cell_id = %id,
-            "recovery marker check failed after restart: cell_id not found in BurnerMarker"
+            "recovery marker check failed after restart: the stored cell marker does not match this cell id"
         );
     }
     Ok(CellEntry { running, marker_ok })
 }
 
-/// Registers the `BurnerMarker` schema and writes one document tagging this
+/// Writes this cell's id under the marker key, tagging this
 /// cell with its own id: the data-intactness proof a restart is expected to
 /// preserve.
 async fn write_marker(
@@ -513,28 +523,44 @@ async fn write_marker(
     Ok(())
 }
 
-/// Queries `BurnerMarker` and reports whether `cell_id` is present. Shared
-/// by recovery and the watchdog's liveness probe so both agree on exactly
-/// one definition of "this cell's data is intact".
+/// Reads the marker key back and reports whether it still holds this
+/// cell's id. Shared by recovery and the watchdog's liveness probe so both
+/// agree on exactly one definition of "this cell's store opened, replayed,
+/// and still holds what it was given".
+///
+/// A cell provisioned before the marker moved out of a collection has no
+/// key yet. Rather than refusing to recover a perfectly good data
+/// directory, that case is migrated once: the key is written now, and the
+/// result is honest either way, because a store that cannot serve the read
+/// or accept the write fails here exactly as a broken store should.
 pub(crate) async fn verify_marker(
     node: &embedded::EmbeddedNode<embedded::EmbeddedStore>,
     cell_id: &str,
 ) -> Result<bool> {
-    let response = node.execute(MARKER_QUERY).await;
-    if response.has_errors() {
-        bail!("BurnerMarker query returned errors: {:?}", response.errors);
+    let txn = node
+        .database
+        .new_txn(true)
+        .await
+        .map_err(|error| anyhow!("opening marker read transaction: {error}"))?;
+    let stored = txn
+        .systemstore()
+        .map_err(|error| anyhow!("opening systemstore for the marker: {error}"))?
+        .get(MARKER_KEY)
+        .await
+        .map_err(|error| anyhow!("reading the cell marker: {error}"))?;
+    drop(txn);
+
+    match stored {
+        Some(value) => Ok(value.as_slice() == cell_id.as_bytes()),
+        None => {
+            tracing::warn!(
+                cell_id,
+                "no cell marker found; writing one now (cell predates the marker key)"
+            );
+            write_marker(node, cell_id).await?;
+            Ok(true)
+        }
     }
-    let found = response
-        .data
-        .as_ref()
-        .and_then(|data| data.get("BurnerMarker"))
-        .and_then(|docs| docs.as_array())
-        .map(|docs| {
-            docs.iter()
-                .any(|doc| doc.get("cell_id").and_then(|v| v.as_str()) == Some(cell_id))
-        })
-        .unwrap_or(false);
-    Ok(found)
 }
 
 #[cfg(test)]

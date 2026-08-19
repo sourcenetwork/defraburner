@@ -1,5 +1,5 @@
 //! Health-probe watchdog: periodically checks each running cell's liveness
-//! by querying its `BurnerMarker`; after repeated failures it drains and
+//! by reading back its marker key; after repeated failures it drains and
 //! re-ignites the cell.
 
 use std::collections::HashMap;
@@ -94,7 +94,7 @@ impl Watchdog {
     }
 
     /// Runs the probe loop forever: every `probe_interval`, queries each
-    /// running cell's `BurnerMarker` with a bounded deadline, and after
+    /// running cell's marker key with a bounded deadline, and after
     /// `FAILURE_THRESHOLD` consecutive failures drains and re-ignites it.
     ///
     /// Deliberately **not** spawned onto its own task internally (there is
