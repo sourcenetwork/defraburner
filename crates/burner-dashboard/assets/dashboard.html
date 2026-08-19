@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEFRABURNER</title>
+<meta name="description" content="Operational console for a defraburner cluster: cells, tenants, autoscaler, mesh, and the tenant data plane." />
+<link rel="stylesheet" href="/dashboard/assets/tokens.css" />
+<link rel="stylesheet" href="/dashboard/assets/app.css" />
+</head>
+<body>
+
+<!-- ============ Token gate (D21): shown until a valid admin token is
+     confirmed against /admin/api/overview; core.js's initTokenGate()
+     swaps this out for #app. ============ -->
+<div id="token-gate" class="token-gate">
+  <div class="token-gate__card">
+    <div class="token-gate__title">DEFRABURNER</div>
+    <p class="token-gate__hint">
+      Paste the admin token printed by <code class="mono">just start</code> (also shown in the
+      dashboard URL's <code class="mono">?token=</code> parameter, which this page consumes once and
+      strips from the address bar).
+    </p>
+    <div class="field">
+      <label for="token-input">Admin token</label>
+      <input id="token-input" class="input input-mono" type="password" autocomplete="off" placeholder="admin token" />
+    </div>
+    <button type="button" id="token-submit" class="btn btn-primary btn-block">Enter</button>
+    <p id="token-error" class="token-gate__error" hidden></p>
+  </div>
+</div>
+
+<!-- ============ App shell ============ -->
+<div id="app" hidden>
+  <header class="gx-top">
+    <span class="wordmark">DEFRABURNER</span>
+    <span class="pill" id="cluster-pill">connecting...</span>
+    <span class="chip chip-warning" id="synthetic-traffic-marker" hidden><span class="d pulse-dot"></span>synthetic traffic running</span>
+    <span class="spacer"></span>
+    <span id="connection-chip" class="chip chip-neutral"><span class="d"></span>connecting</span>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode" title="Switch to light mode">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </button>
+  </header>
+
+  <div class="app-shell">
+    <nav class="sidebar">
+      <button type="button" class="nav-item active" data-view="overview">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        Overview
+      </button>
+      <button type="button" class="nav-item" data-view="cells">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="0"/><rect width="20" height="8" x="2" y="14" rx="0"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>
+        Cells
+      </button>
+      <button type="button" class="nav-item" data-view="tenants">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Tenants
+      </button>
+      <button type="button" class="nav-item" data-view="autoscaler">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+        Autoscaler
+      </button>
+      <button type="button" class="nav-item" data-view="mesh">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="0"/><rect x="2" y="16" width="6" height="6" rx="0"/><rect x="9" y="2" width="6" height="6" rx="0"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
+        Mesh
+      </button>
+      <button type="button" class="nav-item" data-view="console">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+        Console
+      </button>
+    </nav>
+
+    <main class="main">
+      <div class="page">
+
+        <!-- ============ Overview ============ -->
+        <section id="view-overview" class="view is-active">
+          <div class="ui-page-header">
+            <div>
+              <h1>Overview</h1>
+              <p class="ui-page-header-sub">Live cluster stat cards and a per-cell request-rate chart, updated every second over the realtime stream.</p>
+            </div>
+          </div>
+          <div id="overview-stats" class="stat-grid">
+            <div class="ui-stat-value muted">no data yet</div>
+          </div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head">
+              <span class="ui-card-title">Traffic generator</span>
+              <span class="ui-card-sub">schema-driven mixed read/write load through the gateway, using each tenant's own token</span>
+            </div>
+            <div id="traffic-gen-panel" class="ui-card-body"></div>
+          </div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head">
+              <span class="ui-card-title">Cluster replication map</span>
+              <span class="ui-card-sub">one cluster per tenant, real connected-peer data -- never an idealized full mesh</span>
+              <button type="button" id="mesh-spawn" class="btn btn-secondary btn-sm" style="margin-left:auto">
+                <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                spawn cell
+              </button>
+            </div>
+            <div class="ui-card-body">
+              <span class="ui-stat-hint" id="mesh-spawn-result"></span>
+              <div id="overview-mesh-panel"><div class="ui-stat-value muted">no data yet</div></div>
+            </div>
+          </div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Requests per second, by cell</span></div>
+            <div class="ui-card-body">
+              <div id="overview-chart" class="chart-wrap"><div class="ui-stat-value muted">no data yet</div></div>
+              <div id="overview-legend" class="chart-legend"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ Cells ============ -->
+        <section id="view-cells" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Cells</h1>
+              <p class="ui-page-header-sub">Every running cell: identity, tenant assignment, storage, and live peer connectivity. Expand a row to inspect and dial it.</p>
+            </div>
+            <div class="ui-page-header-actions">
+              <input id="cells-search" class="input" placeholder="search id or tenant..." style="max-width:220px" />
+              <button type="button" id="cells-spawn" class="btn btn-primary">
+                <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                spawn cell
+              </button>
+            </div>
+          </div>
+          <div class="row" style="margin-bottom:10px">
+            <span class="ui-stat-hint" id="cells-count">0 of 0</span>
+            <span class="ui-stat-hint" id="cells-spawn-result"></span>
+          </div>
+          <div class="scroll-area">
+            <table class="ui-data-table">
+              <thead><tr><th></th><th>cell</th><th>tenant</th><th>status</th><th>storage</th><th>req/s</th><th>peers</th></tr></thead>
+              <tbody id="cells-tbody"><tr><td colspan="7" class="ui-data-table-empty">no data yet</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ Tenants ============ -->
+        <section id="view-tenants" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Tenants</h1>
+              <p class="ui-page-header-sub">Every declared tenant, its placement and admission counters, and every mutation this cluster supports for it.</p>
+            </div>
+          </div>
+          <div class="row" style="margin-bottom:10px"><span class="ui-stat-hint" id="tenants-count">0</span></div>
+          <div class="scroll-area">
+            <table class="ui-data-table">
+              <thead><tr><th>name</th><th>replicas</th><th>cells</th><th>status</th><th>allowed</th><th>rejected</th></tr></thead>
+              <tbody id="tenants-tbody"><tr><td colspan="6" class="ui-data-table-empty">no data yet</td></tr></tbody>
+            </table>
+          </div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Create a tenant</span></div>
+            <form id="tenant-create-form" class="ui-card-body col">
+              <div class="field">
+                <label for="tenant-create-name">Name</label>
+                <input id="tenant-create-name" class="input input-mono" placeholder="acme-co" pattern="[a-z0-9-]{1,63}" required />
+                <span class="help">lowercase letters, digits, hyphens; 1-63 characters</span>
+              </div>
+              <div class="field">
+                <label for="tenant-create-schema">GraphQL SDL schema</label>
+                <textarea id="tenant-create-schema" class="textarea input-mono" placeholder="type Post { title: String views: Int }" required></textarea>
+              </div>
+              <div class="field" style="max-width:160px">
+                <label for="tenant-create-replicas">Replicas</label>
+                <input id="tenant-create-replicas" class="input" type="number" min="1" value="2" />
+              </div>
+              <div class="row">
+                <button type="submit" id="tenant-create-submit" class="btn btn-primary">create tenant</button>
+                <span id="tenant-create-result" class="ui-stat-hint"></span>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- ============ Autoscaler ============ -->
+        <section id="view-autoscaler" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Autoscaler</h1>
+              <p class="ui-page-header-sub">The live autoscale + placement control loop: policy health, tunable knobs, and the decision timeline it writes on every tick.</p>
+            </div>
+          </div>
+          <div id="autoscaler-banner" class="section-gap"><div class="ui-stat-value muted">no data yet</div></div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Live controls</span></div>
+            <div class="ui-card-body col">
+              <div class="row" style="flex-wrap:wrap;gap:16px">
+                <div class="field" style="max-width:120px">
+                  <label for="autoscaler-min-cells">min cells</label>
+                  <input id="autoscaler-min-cells" class="input" type="number" min="1" />
+                </div>
+                <div class="field" style="max-width:120px">
+                  <label for="autoscaler-max-cells">max cells</label>
+                  <input id="autoscaler-max-cells" class="input" type="number" min="1" />
+                </div>
+                <div class="field" style="max-width:140px">
+                  <label for="autoscaler-cooldown">cooldown (s)</label>
+                  <input id="autoscaler-cooldown" class="input" type="number" min="0" />
+                </div>
+                <div class="field" style="max-width:140px">
+                  <label for="autoscaler-tick-interval">tick interval (s)</label>
+                  <input id="autoscaler-tick-interval" class="input" type="number" min="1" />
+                </div>
+              </div>
+              <div class="row">
+                <button type="button" id="autoscaler-save" class="btn btn-primary">save</button>
+                <span id="autoscaler-save-result" class="ui-stat-hint"></span>
+              </div>
+              <div class="row" style="border-top:1px solid var(--border-subtle);padding-top:14px;margin-top:4px">
+                <button type="button" id="autoscaler-pause-toggle" class="toggle" role="switch" aria-checked="false" aria-label="Pause the autoscaler"></button>
+                <span class="fg-2">pause the autoscaler</span>
+                <span id="autoscaler-pause-result" class="ui-stat-hint"></span>
+                <span class="spacer"></span>
+                <button type="button" id="autoscaler-force-tick" class="btn btn-secondary">force tick</button>
+                <span id="autoscaler-tick-result" class="ui-stat-hint"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">afterburner runtime</span></div>
+            <div id="autoscaler-runtime" class="ui-card-body col"><div class="ui-stat-value muted">no data yet</div></div>
+          </div>
+
+          <div class="ui-section-label section-gap" style="margin-top:24px">decision timeline</div>
+          <div id="decision-timeline">
+            <div id="decision-timeline-empty" class="ui-stat-hint">no decisions yet -- the autoscaler logs one on its first tick</div>
+          </div>
+        </section>
+
+        <!-- ============ Mesh ============ -->
+        <section id="view-mesh" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Mesh</h1>
+              <p class="ui-page-header-sub">Every cell's dialable libp2p address and connected-peer count, the outcome of dialing every configured static peer at startup, and a manual dial.</p>
+            </div>
+          </div>
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Cells</span></div>
+            <div id="mesh-cells" class="ui-card-body"><div class="ui-stat-value muted">no data yet</div></div>
+          </div>
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Static peer dial outcomes</span></div>
+            <div id="mesh-static-peers" class="ui-card-body"><div class="ui-stat-hint">no static --peers configured for this cluster</div></div>
+          </div>
+          <div class="ui-card section-gap">
+            <div class="ui-card-head"><span class="ui-card-title">Dial a peer</span></div>
+            <form id="mesh-dial-form" class="ui-card-body row" style="flex-wrap:wrap">
+              <input id="mesh-dial-cell" class="input input-mono" placeholder="cell id" style="max-width:160px" required />
+              <input id="mesh-dial-addr" class="input input-mono" placeholder="/ip4/host/tcp/port/p2p/peer-id" style="flex:1 1 320px" required />
+              <button type="submit" id="mesh-dial-submit" class="btn btn-primary">dial</button>
+              <span id="mesh-dial-result" class="ui-stat-hint"></span>
+            </form>
+          </div>
+        </section>
+
+        <!-- ============ Console ============ -->
+        <section id="view-console" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Console</h1>
+              <p class="ui-page-header-sub">Generated CRUD over a tenant's own collections, or the raw GraphQL console for anything else. Both go through the gateway's normal tenant-token path, so admission applies exactly like any other client.</p>
+            </div>
+          </div>
+
+          <div class="tabs section-gap">
+            <button type="button" class="tab active" data-console-tab="data">Data</button>
+            <button type="button" class="tab" data-console-tab="graphql">Raw GraphQL</button>
+          </div>
+
+          <!-- ---- Data tab ---- -->
+          <div data-console-panel="data">
+            <div class="ui-card section-gap">
+              <div class="ui-card-head"><span class="ui-card-title">Tenant and token</span></div>
+              <div class="ui-card-body col">
+                <div id="data-no-tenants-hint" class="banner info" hidden>no tenants yet -- create one in the Tenants view first</div>
+                <div class="row" style="flex-wrap:wrap">
+                  <div class="field" style="max-width:220px">
+                    <label for="data-tenant-select">Tenant</label>
+                    <select id="data-tenant-select" class="select"><option value="">select a tenant...</option></select>
+                  </div>
+                  <div class="field" style="flex:1 1 260px">
+                    <label for="data-token-input">Token</label>
+                    <input id="data-token-input" class="input input-mono" type="password" autocomplete="off" placeholder="tenant token" />
+                  </div>
+                  <div style="align-self:flex-end" class="row">
+                    <button type="button" id="data-token-save" class="btn btn-secondary">use token</button>
+                    <button type="button" id="data-rotate-token" class="btn btn-secondary">rotate token</button>
+                  </div>
+                </div>
+                <p id="data-token-hint" class="ui-stat-hint"></p>
+                <p class="ui-stat-hint">Replication across cells is eventually consistent, not instantaneous; see docs/consistency.md for this cluster's convergence model.</p>
+              </div>
+            </div>
+
+            <div id="data-outcome"></div>
+
+            <div class="ui-section-label section-gap">collections</div>
+            <div id="data-collections" class="section-gap"><div class="ui-stat-hint">select a tenant and provide its token first</div></div>
+
+            <div id="data-table-wrap" class="section-gap"><div class="ui-stat-hint">pick a collection above</div></div>
+
+            <div id="data-form"></div>
+
+            <div id="data-seed"></div>
+          </div>
+
+          <!-- ---- Raw GraphQL tab ---- -->
+          <div data-console-panel="graphql" hidden>
+            <div class="ui-card section-gap">
+              <div class="ui-card-body col">
+                <div class="field">
+                  <label for="console-token">Bearer token</label>
+                  <input id="console-token" class="input input-mono" type="password" autocomplete="off" placeholder="tenant token (or the admin token, for /admin/* paths)" />
+                </div>
+                <div class="field">
+                  <label for="console-query">GraphQL query or mutation</label>
+                  <textarea id="console-query" class="textarea input-mono" style="min-height:160px" placeholder="query { __typename }"></textarea>
+                </div>
+                <div class="row">
+                  <button type="button" id="console-run" class="btn btn-primary">run</button>
+                  <button type="button" id="console-copy-curl" class="btn btn-secondary">copy as curl</button>
+                </div>
+                <div class="ui-section-label">response</div>
+                <pre id="console-output" class="code">(nothing run yet)</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="/dashboard/assets/core.js"></script>
+<script src="/dashboard/assets/charts.js"></script>
+<script src="/dashboard/assets/view-overview.js"></script>
+<script src="/dashboard/assets/mesh-panel.js"></script>
+<script src="/dashboard/assets/view-traffic-gen.js"></script>
+<script src="/dashboard/assets/view-cells.js"></script>
+<script src="/dashboard/assets/view-tenants.js"></script>
+<script src="/dashboard/assets/view-autoscaler.js"></script>
+<script src="/dashboard/assets/view-mesh.js"></script>
+<script src="/dashboard/assets/view-console.js"></script>
+<script src="/dashboard/assets/view-console-seed.js"></script>
+<script src="/dashboard/assets/main.js"></script>
+</body>
+</html>

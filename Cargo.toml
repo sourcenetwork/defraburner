@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/defraburner",
+    "crates/burner-cell",
+    "crates/burner-mesh",
+    "crates/burner-gateway",
+    "crates/burner-policy",
+    "crates/burner-dashboard",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.91"
+version = "0.1.0"
+license = "Apache-2.0 OR MIT"
+
+# Thin-LTO iteration profile: fast to rebuild, used by `just build-release-fast`
+# and everyday `cargo build --release`.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+
+# Self-documenting alias of `release` (console round, operator directive):
+# `just start`/`just up` run `cargo run --profile release-fast`, so the
+# profile name in that command reads correctly on its own, not just via a
+# comment pointing back at `[profile.release]`. Genuinely the same
+# profile (`inherits`, no overrides): one build cache under
+# `target/release-fast/`, not a second copy of `target/release/`.
+[profile.release-fast]
+inherits = "release"
+
+# Phase 6: the actual shipped profile (`just build-release`, the dist recipe).
+# Fat LTO + one codegen unit buys real size and speed over `release`'s
+# thin-LTO iteration profile. `panic` stays "unwind", spelled out here
+# rather than merely left at its inherited default: a panicking
+# cell-supervision or policy-tick task must stay contained to its own task
+# (D12's supervised join handles), not abort the whole process and take
+# every other cell down with it. Supervision favors resilience over the
+# ~5% binary-size win `panic = "abort"` would buy.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "unwind"

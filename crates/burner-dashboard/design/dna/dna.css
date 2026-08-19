@@ -1,0 +1,125 @@
+/* ===================================================================
+   THE DNA - page-scoped recolor (verbatim from
+   components/gallery-dna.html head <style>, minus html scaffolding).
+   Void near-black paper · indigo #818cf8 accent · orange #f97316 warm ·
+   the system's fonts (Newsreader / IBM Plex Sans / JetBrains Mono) ·
+   cornered edges. This is THE dashboard look (dark default).
+   =================================================================== */
+:root, :root[data-theme="dark"] {
+  /* exact the DNA tokens */
+  --color-paper: oklch(13.0% 0.027 262); --color-paper-2: oklch(18.5% 0.034 267);
+  --color-paper-deep: oklch(15.0% 0.021 264);
+  --scram-accent: oklch(68.0% 0.158 277); --scram-warm: oklch(70.5% 0.187 48);
+
+  /* indigo accent doubles as focus; orange = warm secondary (shared both themes) */
+  --accent: var(--scram-accent); --accent-hover: oklch(74% 0.16 277); --accent-active: oklch(74% 0.16 277);
+  --accent-soft: color-mix(in oklab, var(--scram-accent) 12%, transparent); --accent-fg:#fff;
+  --border-focus: var(--scram-accent); --fg-accent: var(--scram-accent); --fg-link: var(--scram-accent);
+  --accent-2: var(--scram-warm); --accent-2-soft: color-mix(in oklab, var(--scram-warm) 14%, transparent); --accent-2-border: color-mix(in oklab, var(--scram-warm) 50%, transparent);
+
+  /* semantic slots retargeted to the two-accent DNA (shared) */
+  --dna-saffron-300: oklch(80% 0.12 277); --dna-saffron-400: oklch(74% 0.15 277);
+  --dna-saffron-500: var(--scram-accent); --dna-saffron-600: oklch(60% 0.15 277); --dna-saffron-700: oklch(52% 0.16 277);
+  --dna-cyan-replay: var(--scram-accent); --dna-success: oklch(60% 0.15 160); --dna-crimson-witness: oklch(58% 0.2 20); --dna-error: oklch(58% 0.2 20);
+
+  /* fonts: the design's families */
+  --font-serif: "Newsreader", "Source Serif Pro", Georgia, serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Newsreader", "Source Serif Pro", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  --font-hallmark-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* the DNA radii: CORNERED per project direction */
+  --radius-xs:0; --radius-sm:0; --radius-md:0; --radius-lg:0; --radius-xl:0;
+  --radius-pill:0; --radius-badge:0;
+  --dur-fast:180ms; --dur-normal:240ms; --dur-slow:320ms; --ease-standard:cubic-bezier(0.16,1,0.3,1);
+}
+/* LIGHT surfaces: the DNA-tinted, indigo/orange accents intact */
+:root:not([data-theme="dark"]) {
+  --bg-canvas: oklch(97.5% 0.006 262); --bg-raised:#ffffff; --bg-sunken: oklch(95% 0.008 262);
+  --fg-1: oklch(20% 0.03 264); --fg-2: oklch(40% 0.03 260); --fg-3: oklch(55% 0.03 258);
+  --border-subtle: oklch(90% 0.012 262); --border-default: oklch(84% 0.016 262); --border-strong: oklch(20% 0.03 264);
+  --fg-accent: oklch(52% 0.16 277); --fg-link: oklch(52% 0.16 277);
+  --dna-saffron-700: oklch(48% 0.16 277);
+}
+/* DARK surfaces: void near-black paper */
+:root[data-theme="dark"], .theme-dark {
+  --bg-canvas: var(--color-paper); --bg-raised: var(--color-paper-2);
+  --bg-sunken: var(--color-paper-deep); --bg-overlay: rgba(3,7,18,0.74);
+  --fg-1: oklch(91.6% 0 0); --fg-2: oklch(71.1% 0.035 257); --fg-3: oklch(60% 0.03 257);
+  --border-subtle: oklch(27.9% 0.037 260); --border-default: oklch(31% 0.04 260); --border-strong: oklch(45% 0.05 260);
+  --accent-fg:#0b0f1e;
+}
+
+/* keep everything CORNERED (square): this DNA's soft radii are overridden */
+.btn,.btn-group,.input,.select,.textarea,.input-group,.card,.panel,.ui-card,.modal,.toast,.banner,
+.kpi,.ui-stat,.ui-data-table,.data-table-search,.code,.code-wrap,.term,.env-pill,.theme-toggle,
+.avatar,.card-tile,.empty-state,.steps .s .n,.checkbox input,.status-band,.status-band .icon-wrap { border-radius: 0 !important; }
+.btn,.input,.select,.textarea,.input-group,.checkbox input,.theme-toggle { border-radius: 0 !important; }
+.chip,.chip-sm,.filter-chip,.kbd,.tab .count,.nav-item.danger .count,.pricing-pill,.pricing-pill .v,
+.phase2-badge,.progress-track,.progress-fill,.progress-buffer,.progress-stack,.progress-seg .tick { border-radius: 0 !important; }
+
+/* accent recolor -> indigo primary, orange warm */
+.btn-primary { background: var(--scram-accent) !important; color:#0b0f1e !important; }
+.btn-primary:hover { background: oklch(74% 0.16 277) !important; }
+.avatar { background: var(--scram-accent) !important; color:#0b0f1e !important; }
+.chip-accent { background: color-mix(in oklab,var(--scram-accent) 14%,transparent) !important; border-color: color-mix(in oklab,var(--scram-accent) 55%,transparent) !important; color: oklch(80% 0.12 277) !important; }
+.kpi .v.accent,.ui-stat.accent .ui-stat-value { background: linear-gradient(135deg,#6366f1,#a855f7 60%,#f97316) !important; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent !important; }
+.kpi .v.replay,.ui-stat.replay .ui-stat-value { background:none !important; -webkit-text-fill-color:currentColor; color: oklch(80% 0.12 277) !important; }
+.kpi::after,.tab.active::after,.nav-item.active::before,
+.progress-seg .tick.on,.toggle.on { background: var(--scram-accent) !important; }
+.progress-fill.accent,.progress-fill.gradient { background: linear-gradient(90deg,#6366f1 0%,#a855f7 55%,#f97316 100%) !important; }
+.progress-fill.replay.indeterminate { background: linear-gradient(90deg,#5b63ec 0%,#818cf8 50%,#f97316 100%) !important; }
+.checkbox input:checked,.radio input:checked { background: var(--scram-accent) !important; border-color: var(--scram-accent) !important; }
+.checkbox input:checked::after { background-image:url("data:image/svg+xml;utf8,<svg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'><path d='M3 8.5l3 3 7-7' fill='none' stroke='%230b0f1e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important; }
+.banner { background: linear-gradient(90deg, color-mix(in oklab,var(--scram-accent) 16%,transparent), transparent 72%) !important; border-left-color: var(--scram-accent) !important; }
+.ring-svg .meter { stroke: var(--scram-accent) !important; }
+.ring-svg.replay .meter  { stroke: var(--scram-accent) !important; }
+.ring-svg.success .meter { stroke: var(--dna-success) !important; }
+.ring-svg.warning .meter { stroke: var(--scram-warm) !important; }
+.ring-svg.witness .meter { stroke: var(--dna-crimson-witness) !important; }
+.ring-svg.iris .meter    { stroke: var(--scram-warm) !important; }
+.progress-ring { --ring-color: var(--scram-accent); }
+.progress-ring.success { --ring-color: var(--dna-success); }
+.progress-ring.warning { --ring-color: var(--scram-warm); }
+.progress-ring.witness { --ring-color: var(--dna-crimson-witness); }
+.btn-accent2 { background: var(--scram-warm) !important; color:#1a0f04 !important; }
+.input:focus,.select:focus,.textarea:focus,.input-group:focus-within { box-shadow:0 0 0 2px color-mix(in oklab,var(--scram-accent) 45%,transparent) !important; }
+
+/* brand gradient display text (hero/section titles): the serif display.
+   defraburner: the DEFRABURNER wordmark/logo gets this exact treatment. */
+.gx-wrap .ui-page-header h1 {
+  font-family: var(--font-serif); font-weight:600; letter-spacing:-0.02em; line-height:1.05;
+  background: linear-gradient(135deg,#6366f1,#a855f7 55%,#f97316);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
+}
+/* panels over shadows; indigo hairline hover */
+.card,.panel,.ui-card,.kpi { box-shadow:none !important; }
+.ui-card.is-interactive:hover,.kpi:hover { border-color: var(--scram-accent) !important; transform:none !important; }
+.gx-top { background: rgba(3,7,18,0.78) !important; }
+:root:not([data-theme="dark"]) .gx-top { background: color-mix(in oklab, var(--bg-canvas) 82%, transparent) !important; }
+.hero,.cta-banner { background: linear-gradient(135deg,#0c1222 0%,#0f1530 60%,#030712 100%) !important; }
+:root:not([data-theme="dark"]) .hero, :root:not([data-theme="dark"]) .cta-banner { background: linear-gradient(135deg, oklch(96% 0.01 262) 0%, oklch(93% 0.02 277) 100%) !important; }
+::selection { background: var(--scram-accent); color:#0b0f1e; }
+
+/* Gallery chrome (sticky glass top bar + layout rhythm), from the same page */
+.gx-top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 28px;
+  background: color-mix(in oklab, var(--bg-canvas) 82%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.gx-top .title { font-family: var(--font-serif); font-weight: 500; font-size: 18px; letter-spacing: -0.01em; }
+.gx-top .pill { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); border: 1px solid var(--border-default); padding: 3px 8px; }
+.gx-wrap { max-width: 1180px; margin: 0 auto; padding: 32px 28px 120px; }
+.gx-sec { padding: 28px 0; border-bottom: 1px solid var(--border-subtle); }
+.gx-sec > h2 { font-family: var(--font-serif); font-weight: 500; font-size: 22px; letter-spacing: -0.015em; margin: 0 0 4px; }
+.gx-sec > .desc { color: var(--fg-3); font-size: 13px; margin: 0 0 20px; }
+.gx-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.gx-grid { display: grid; gap: 14px; }
+.gx-grid.k4 { grid-template-columns: repeat(4, 1fr); }
+.gx-grid.k3 { grid-template-columns: repeat(3, 1fr); }
+.gx-grid.k2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 860px) { .gx-grid.k4 { grid-template-columns: repeat(2,1fr); } .gx-grid.k3 { grid-template-columns: 1fr; } }

@@ -1,0 +1,36 @@
+[package]
+name = "burner-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Same feature selection as defraburner's own dependency (D6/D9): wasm-only,
+# so policy packages always run sandboxed, and `register_precompiled` stays
+# on the plain (non-threaded) engine `Mode::Wasm` builds. Published crate
+# (operator directive): afterburner is the operator's own crate, released
+# to crates.io at 0.2.7, matching what the sibling checkout at
+# ~/projects/afterburner currently builds; defradb.rs crates stay path
+# deps (verified 404 on crates.io, not published).
+afterburner = { version = "0.2.7", default-features = false, features = [
+    "wasm",
+] }
+burner-cell = { path = "../burner-cell" }
+burner-mesh = { path = "../burner-mesh" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs", "sync"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tracing = "0.1"
+# `.afb` extraction (D9/D17a): a `.afb` is a zstd-compressed tar; both
+# crates are already resolved in the wider graph (verified in Cargo.lock:
+# afterburner-wasi already depends on tar; afterburner-node-compat and
+# wasmtime-internal-cache, pulled in transitively, already depend on zstd),
+# so pinning the same non-default feature set here adds no new build unit.
+tar = { version = "0.4", default-features = false }
+zstd = { version = "0.13", default-features = false }
+
+[dev-dependencies]
+tempfile = "3"

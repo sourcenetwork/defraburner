@@ -1,0 +1,45 @@
+[package]
+name = "burner-cell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+embedded = { path = "../../../defradb.rs/crates/embedded" }
+storage = { path = "../../../defradb.rs/crates/storage", features = ["lark", "redb"] }
+query = { path = "../../../defradb.rs/crates/query" }
+# ManagedP2PSystem::ops() returns Arc<dyn defra_http::P2POperations>; calling
+# its trait methods (local_peer_id, listen_addresses, ...) requires the trait
+# in scope, which requires defra-http as a direct dependency (mirrors the
+# same note in crates/defraburner/Cargo.toml).
+defra-http = { path = "../../../defradb.rs/crates/http" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"] }
+# `embedded::build_with_store`'s returned future is not `Send` (see
+# src/watchdog.rs's doc comment on `Watchdog::run`), so bounded-concurrency
+# ignition (recovery) has to poll multiple in-flight builds on one task
+# instead of spawning each onto its own; buffer_unordered is exactly that,
+# and is what the Phase 1 plan names as the primary option for this.
+futures = { version = "0.3", default-features = false, features = ["std"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+# Not in the Phase 1 plan's baseline dep list: required to generate and
+# expand Ed25519 signing key material (see src/identity.rs doc comment for
+# why). Both pinned to match defradb.rs's own workspace versions
+# (Cargo.toml: rand = "0.8", ed25519-dalek = { version = "2.1", ... }) so the
+# dependency graph unifies on one copy of each instead of two.
+rand = "0.8"
+ed25519-dalek = "2.1"
+# Console round (D25): DrainCellError/DropTenantError need a real Error
+# impl for the admin command channel's replies to convert cleanly into
+# anyhow via `?` at existing call sites (autoscaler.rs). Already resolved
+# transitively (defradb.rs and afterburner both depend on it), so this adds
+# no new build unit.
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+proptest = "1"

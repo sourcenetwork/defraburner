@@ -1,0 +1,275 @@
+/* ============================================================
+   DNA design system - core tokens
+   colors_and_type.css
+
+   Theme: deep ink + scholarly gold + parchment
+   Serious by default, vibrant where it matters.
+   NOTE (defraburner import): reference copy. The served dashboard
+   inlines what it needs and never imports remote fonts; the
+   the DNA block in gallery-dna.html overrides the palette.
+   ============================================================ */
+
+/* ---------- Webfonts (Google Fonts CDN - stripped in served assets) ----- */
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  /* Primary */
+  --dna-ink:        #0A1628;
+  --dna-saffron:    #F4A623;
+  --dna-parchment:  #FAF5E8;
+
+  /* Secondary */
+  --dna-cyan-replay:      #22D3EE;
+  --dna-crimson-witness:  #DC2626;
+  --dna-stone:            #1F2937;
+  --dna-mist:             #9CA3AF;
+
+  /* Utility */
+  --dna-success: #10B981;
+  --dna-warning: #FBBF24;
+  --dna-error:   #EF4444;
+
+  --dna-ink-900:      #06101F;
+  --dna-ink-800:      #0A1628;
+  --dna-ink-700:      #142036;
+  --dna-ink-600:      #1B2A44;
+  --dna-ink-500:      #243553;
+
+  --dna-parchment-50:  #FFFDF6;
+  --dna-parchment-100: #FAF5E8;
+  --dna-parchment-200: #F2EAD3;
+  --dna-parchment-300: #E6DAB6;
+  --dna-parchment-400: #C9BB8E;
+
+  --dna-saffron-300:  #FCD27A;
+  --dna-saffron-400:  #F8BB4D;
+  --dna-saffron-500:  #F4A623;
+  --dna-saffron-600:  #D8881A;
+  --dna-saffron-700:  #B26B12;
+
+  /* Surfaces (light default) */
+  --bg-canvas:     var(--dna-parchment-100);
+  --bg-raised:     var(--dna-parchment-50);
+  --bg-sunken:     var(--dna-parchment-200);
+  --bg-overlay:    rgba(10, 22, 40, 0.55);
+  --bg-inverse:    var(--dna-ink-800);
+
+  --fg-1:        var(--dna-ink-800);
+  --fg-2:        #2C3A52;
+  --fg-3:        #5A6779;
+  --fg-disabled: var(--dna-mist);
+  --fg-inverse:  var(--dna-parchment-100);
+  --fg-accent:   var(--dna-saffron-700);
+  --fg-link:     var(--dna-saffron-700);
+
+  --border-subtle:  #E6DAB6;
+  --border-default: #C9BB8E;
+  --border-strong:  var(--dna-ink-800);
+  --border-focus:   var(--dna-saffron-500);
+
+  --accent:           var(--dna-saffron-500);
+  --accent-hover:     var(--dna-saffron-600);
+  --accent-active:    var(--dna-saffron-700);
+  --accent-soft:      #FBE7B8;
+  --accent-fg:        var(--dna-ink-900);
+
+  --state-replay:   var(--dna-cyan-replay);
+  --state-witness:  var(--dna-crimson-witness);
+  --state-success:  var(--dna-success);
+  --state-warning:  var(--dna-warning);
+  --state-error:    var(--dna-error);
+
+  /* Typography */
+  --font-serif:   "Newsreader", "Source Serif Pro", Georgia, serif;
+  --font-sans:    "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
+
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-15: 0.9375rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-30: 1.875rem;
+  --fs-36: 2.25rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  --lh-tight:   1.05;
+  --lh-snug:    1.2;
+  --lh-normal:  1.45;
+  --lh-relaxed: 1.6;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-eyebrow: 0.14em;
+
+  --space-0:  0;
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  --radius-0:   0;
+  --radius-xs:  2px;
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  10px;
+  --radius-xl:  14px;
+  --radius-pill: 999px;
+
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px rgba(10, 22, 40, 0.06), 0 1px 1px rgba(10, 22, 40, 0.04);
+  --shadow-2: 0 2px 6px rgba(10, 22, 40, 0.07), 0 1px 2px rgba(10, 22, 40, 0.06);
+  --shadow-3: 0 8px 20px rgba(10, 22, 40, 0.10), 0 2px 6px rgba(10, 22, 40, 0.06);
+  --shadow-4: 0 20px 40px rgba(10, 22, 40, 0.14), 0 6px 12px rgba(10, 22, 40, 0.08);
+  --shadow-inset: inset 0 1px 0 rgba(10, 22, 40, 0.06);
+  --shadow-replay-glow: 0 0 0 1px rgba(34, 211, 238, 0.4), 0 0 24px rgba(34, 211, 238, 0.25);
+
+  --ease-standard: cubic-bezier(0.2, 0.0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.0, 0, 1.2);
+  --ease-exit:     cubic-bezier(0.4, 0.0, 1, 1);
+  --dur-fast:   120ms;
+  --dur-normal: 200ms;
+  --dur-slow:   360ms;
+
+  --container-narrow: 720px;
+  --container-prose:  920px;
+  --container-wide:   1240px;
+  --container-bleed:  1440px;
+}
+
+/* Dark theme: invert surfaces, keep saffron as accent */
+:root[data-theme="dark"],
+.theme-dark {
+  --bg-canvas:   var(--dna-ink-800);
+  --bg-raised:   var(--dna-ink-700);
+  --bg-sunken:   var(--dna-ink-900);
+  --bg-overlay:  rgba(6, 16, 31, 0.7);
+  --bg-inverse:  var(--dna-parchment-100);
+
+  --fg-1:       var(--dna-parchment-100);
+  --fg-2:       #B7C0CF;
+  --fg-3:       #7F8BA0;
+  --fg-disabled:#4A556B;
+  --fg-inverse: var(--dna-ink-900);
+  --fg-accent:  var(--dna-saffron-400);
+  --fg-link:    var(--dna-saffron-400);
+
+  --border-subtle:  rgba(250, 245, 232, 0.06);
+  --border-default: rgba(250, 245, 232, 0.12);
+  --border-strong:  rgba(250, 245, 232, 0.32);
+  --border-focus:   var(--dna-saffron-400);
+
+  --accent-soft: rgba(244, 166, 35, 0.16);
+
+  --shadow-1: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 10px rgba(0,0,0,0.5);
+  --shadow-3: 0 1px 0 rgba(255,255,255,0.05) inset, 0 12px 28px rgba(0,0,0,0.6);
+  --shadow-4: 0 1px 0 rgba(255,255,255,0.06) inset, 0 24px 48px rgba(0,0,0,0.7);
+}
+
+/* Semantic type styles */
+.t-display-xl,
+.t-display-l,
+.t-display-m,
+.t-display-s,
+.t-h1, .t-h2, .t-h3, .t-h4 {
+  font-family: var(--font-serif);
+  font-feature-settings: "ss01", "ss02";
+  color: var(--fg-1);
+  text-wrap: balance;
+}
+
+.t-display-xl { font-size: clamp(3.5rem, 6vw, var(--fs-80)); line-height: var(--lh-tight); letter-spacing: var(--tracking-tight); font-weight: 500; }
+.t-display-l  { font-size: clamp(2.75rem, 5vw, var(--fs-64)); line-height: var(--lh-tight); letter-spacing: var(--tracking-tight); font-weight: 500; }
+.t-display-m  { font-size: var(--fs-48); line-height: var(--lh-snug); letter-spacing: var(--tracking-tight); font-weight: 500; }
+.t-display-s  { font-size: var(--fs-36); line-height: var(--lh-snug); font-weight: 500; }
+
+.t-h1 { font-size: var(--fs-30); line-height: var(--lh-snug);   font-weight: 600; }
+.t-h2 { font-size: var(--fs-24); line-height: var(--lh-snug);   font-weight: 600; }
+.t-h3 { font-size: var(--fs-20); line-height: var(--lh-snug);   font-weight: 600; }
+.t-h4 { font-size: var(--fs-18); line-height: var(--lh-snug);   font-weight: 600; }
+
+.t-body-l,
+.t-body,
+.t-body-s,
+.t-caption,
+.t-overline {
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+}
+
+.t-body-l   { font-size: var(--fs-18); line-height: var(--lh-relaxed); font-weight: 400; text-wrap: pretty; }
+.t-body     { font-size: var(--fs-16); line-height: var(--lh-relaxed); font-weight: 400; text-wrap: pretty; }
+.t-body-s   { font-size: var(--fs-14); line-height: var(--lh-normal);  font-weight: 400; }
+.t-caption  { font-size: var(--fs-12); line-height: var(--lh-normal);  font-weight: 400; color: var(--fg-3); }
+.t-overline {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.t-mono,
+.t-code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-13);
+  line-height: var(--lh-normal);
+  font-feature-settings: "calt", "zero";
+}
+
+.t-pull-quote {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--fs-30);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+  text-wrap: balance;
+}
+
+/* Element defaults for opt-in pages */
+.dna-base {
+  background: var(--bg-canvas);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-16);
+  line-height: var(--lh-relaxed);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.dna-base h1 { font: 500 var(--fs-48)/var(--lh-tight) var(--font-serif); letter-spacing: var(--tracking-tight); }
+.dna-base h2 { font: 600 var(--fs-30)/var(--lh-snug)  var(--font-serif); }
+.dna-base h3 { font: 600 var(--fs-24)/var(--lh-snug)  var(--font-serif); }
+.dna-base h4 { font: 600 var(--fs-18)/var(--lh-snug)  var(--font-sans); }
+.dna-base p  { margin: 0 0 1em; }
+.dna-base code,
+.dna-base pre { font-family: var(--font-mono); }
+.dna-base a {
+  color: var(--fg-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--fg-link) 45%, transparent);
+  transition: text-decoration-color var(--dur-fast) var(--ease-standard);
+}
+.dna-base a:hover { text-decoration-color: var(--fg-link); }
+
+::selection {
+  background: var(--dna-saffron-500);
+  color: var(--dna-ink-900);
+}

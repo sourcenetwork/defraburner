@@ -1,0 +1,10 @@
+{
+  "fs": "None",
+  "net": "None",
+  "crypto": false,
+  "child_process": false,
+  "env": "None",
+  "allow_exit": false,
+  "http_timeout_ms": null,
+  "listen": "None"
+}

@@ -1,0 +1,13 @@
+[format]
+version = "1.0"
+
+[package]
+entry = "source/main.js"
+language = "js"
+license = "Apache-2.0"
+name = "autoscale-default"
+namespace = "defraburner"
+version = "0.1.0"
+
+[runtime]
+min = "0.1.0"

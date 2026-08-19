@@ -1,0 +1,45 @@
+[package]
+name = "defraburner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+burner-cell = { path = "../burner-cell" }
+burner-mesh = { path = "../burner-mesh" }
+burner-gateway = { path = "../burner-gateway" }
+burner-policy = { path = "../burner-policy" }
+embedded = { path = "../../../defradb.rs/crates/embedded", features = ["iroh"] }
+storage = { path = "../../../defradb.rs/crates/storage", features = ["lark"] }
+query = { path = "../../../defradb.rs/crates/query" }
+# Not in the original dep list: embedded's ManagedP2PSystem::ops() returns
+# Arc<dyn defra_http::P2POperations>, so calling its trait methods (
+# local_peer_id, listen_addresses, connect_peer, connected_peers,
+# add_collections, sync_documents) requires the trait in scope, which
+# requires defra-http as a direct dependency. It is already compiled
+# transitively via embedded's own dependency on it, so this adds no new
+# build work.
+defra-http = { path = "../../../defradb.rs/crates/http" }
+# Published crate (operator directive): see burner-policy/Cargo.toml's
+# note on the same dependency.
+afterburner = { version = "0.2.7", default-features = false, features = [
+    "wasm",
+] }
+
+# "sync" made explicit (console round, D25): start.rs/commands.rs now use
+# tokio::sync::{Mutex, mpsc, oneshot} directly for the admin command
+# channel, not just transitively via sibling crates' own feature flags.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"
+# go_interop.rs drives the real Go DefraDB node's HTTP API (schema, GraphQL,
+# p2p/info) as a plain blocking client; no async HTTP surface is needed.
+ureq = { version = "2", features = ["json"] }

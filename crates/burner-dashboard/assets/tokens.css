@@ -1,0 +1,136 @@
+/* ============================================================
+   defraburner dashboard -- design tokens (console round, D24)
+
+   The DNA design system's tokens, ported from
+   crates/burner-dashboard/design/dna/tokens.css + dna.css: the DNA
+   recolor block (void near-black paper, indigo #818cf8 + orange #f97316,
+   cornered edges) is the dashboard's actual look, not a base theme with
+   the recolor layered on top -- there is only one theme here, and it is
+   this one. Self-contained: no CSS import rule, no remote fonts (see
+   app.css's top for the font-face block pointing at the embedded woff2
+   files).
+
+   Dark is the default (html[data-theme="dark"], set server-side in
+   dashboard.html and toggled by theme.js); the light block is the
+   DNA-tinted alternate reached via the theme toggle.
+   ============================================================ */
+
+:root {
+  /* ---- Brand (shared both themes) -------------------------------- */
+  --color-paper:      oklch(13.0% 0.027 262);
+  --color-paper-2:    oklch(18.5% 0.034 267);
+  --color-paper-deep: oklch(15.0% 0.021 264);
+
+  --accent:        oklch(68.0% 0.158 277); /* indigo #818cf8-ish */
+  --accent-hover:  oklch(74% 0.16 277);
+  --accent-active: oklch(74% 0.16 277);
+  --accent-soft:   color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-fg:     #fff;
+  --accent-2:        oklch(70.5% 0.187 48); /* warm orange #f97316-ish */
+  --accent-2-soft:   color-mix(in oklab, var(--accent-2) 14%, transparent);
+  --accent-2-border: color-mix(in oklab, var(--accent-2) 50%, transparent);
+
+  --state-success: oklch(60% 0.15 160);
+  --state-warning: var(--accent-2);
+  --state-error:   oklch(58% 0.2 20);
+
+  /* Brand gradient: DEFRABURNER wordmark, accent stat numerals, gradient
+     progress fills. Indigo -> purple -> orange, never used for series
+     identity (D23/D24 gauges rule). */
+  --grad-brand: linear-gradient(135deg, #6366f1, #a855f7 55%, #f97316);
+  --grad-brand-fill: linear-gradient(90deg, #6366f1 0%, #a855f7 55%, #f97316 100%);
+
+  /* Cluster chart series palette (D24, validator-approved, fixed order).
+     Never reassigned per-render: index 0 is always cell 0's color. */
+  --series-0: #6366f1;
+  --series-1: #ea580c;
+  --series-2: #059669;
+  --series-3: #a855f7;
+  --series-other: var(--fg-3);
+
+  /* ---- Type ------------------------------------------------------- */
+  --font-serif: "Newsreader", "Source Serif Pro", Georgia, serif;
+  --font-sans:  "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-15: 0.9375rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-30: 1.875rem;
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.2;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --tracking-tight: -0.02em;
+  --tracking-eyebrow: 0.14em;
+
+  /* ---- Space / radius / motion ------------------------------------ */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem;
+
+  /* Cornered, everywhere (D24 project direction): every radius is 0. */
+  --radius-xs: 0; --radius-sm: 0; --radius-md: 0; --radius-lg: 0;
+  --radius-xl: 0; --radius-pill: 0; --radius-badge: 0;
+
+  --shadow-1: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-2: 0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 10px rgba(0,0,0,0.5);
+  --shadow-3: 0 1px 0 rgba(255,255,255,0.05) inset, 0 12px 28px rgba(0,0,0,0.6);
+  --shadow-4: 0 1px 0 rgba(255,255,255,0.06) inset, 0 24px 48px rgba(0,0,0,0.7);
+
+  --dur-fast: 120ms; --dur-normal: 200ms; --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+
+  /* ---- Dark surfaces (the default) --------------------------------- */
+  --bg-canvas:  var(--color-paper);
+  --bg-raised:  var(--color-paper-2);
+  --bg-sunken:  var(--color-paper-deep);
+  --bg-overlay: rgba(3, 7, 18, 0.74);
+
+  --fg-1: oklch(91.6% 0 0);
+  --fg-2: oklch(71.1% 0.035 257);
+  --fg-3: oklch(60% 0.03 257);
+  --fg-disabled: oklch(45% 0.05 260);
+  --fg-accent: oklch(74% 0.15 277);
+  --fg-link: oklch(74% 0.15 277);
+
+  --border-subtle:  oklch(27.9% 0.037 260);
+  --border-default: oklch(31% 0.04 260);
+  --border-strong:  oklch(45% 0.05 260);
+  --border-focus:   var(--accent);
+}
+
+/* Light theme (the DNA-tinted alternate, reached via the toggle). */
+:root[data-theme="light"] {
+  --bg-canvas: oklch(97.5% 0.006 262);
+  --bg-raised: #ffffff;
+  --bg-sunken: oklch(95% 0.008 262);
+  --bg-overlay: rgba(10, 22, 40, 0.45);
+
+  --fg-1: oklch(20% 0.03 264);
+  --fg-2: oklch(40% 0.03 260);
+  --fg-3: oklch(55% 0.03 258);
+  --fg-disabled: oklch(70% 0.02 260);
+  --fg-accent: oklch(52% 0.16 277);
+  --fg-link: oklch(52% 0.16 277);
+
+  --border-subtle:  oklch(90% 0.012 262);
+  --border-default: oklch(84% 0.016 262);
+  --border-strong:  oklch(20% 0.03 264);
+
+  --accent-fg: #0b0f1e;
+  --shadow-1: 0 1px 2px rgba(10,22,40,0.05);
+  --shadow-2: 0 4px 14px -8px rgba(10,22,40,0.12);
+  --shadow-3: 0 12px 28px rgba(10,22,40,0.10);
+  --shadow-4: 0 20px 40px rgba(10,22,40,0.14);
+}
+
+::selection { background: var(--accent); color: #0b0f1e; }

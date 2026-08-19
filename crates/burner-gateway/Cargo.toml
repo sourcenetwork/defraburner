@@ -1,0 +1,57 @@
+[package]
+name = "burner-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+burner-cell = { path = "../burner-cell" }
+burner-mesh = { path = "../burner-mesh" }
+# Phase 4/D17: /admin/status reads the live policy-health status and the
+# decision-log tail. burner-policy does not depend on this crate, so this
+# edge is one-directional (no cycle).
+burner-policy = { path = "../burner-policy" }
+# Phase 5: the dashboard's static shell + assets, mounted into this
+# crate's own router (gateway::build). One-directional (no cycle):
+# burner-dashboard does not depend on this crate.
+burner-dashboard = { path = "../burner-dashboard" }
+embedded = { path = "../../../defradb.rs/crates/embedded" }
+# Server/ServerConfig/AppState* are named directly (router_build.rs), so
+# unlike burner-mesh's P2POperations-only usage, this one IS a direct
+# dependency: those are concrete types/constructors, not trait-object
+# method calls resolved through an already-typed value.
+defra-http = { path = "../../../defradb.rs/crates/http" }
+# Only for parse_sdl, to validate a tenant's schema up front in the
+# POST /admin/tenants handler (mirroring the `tenant create` CLI path in
+# crates/defraburner/src/tenant.rs) before writing it to disk.
+query = { path = "../../../defradb.rs/crates/query" }
+
+axum = "0.8"
+tower = "0.5"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs", "sync"] }
+# Phase 5: builds the SSE response stream (sse.rs) via
+# futures::stream::unfold. Already a direct dependency of burner-mesh at
+# the same version/feature set, so this adds no new build unit.
+futures = { version = "0.3", default-features = false, features = ["std"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+sha2 = "0.10"
+rand = "0.8"
+# Vetted constant-time comparison for token digest lookup (auth.rs); never
+# roll a hand-written one. Already transitively present (ed25519-dalek
+# pulls it in via burner-cell), pinned here directly since its API is
+# named directly, not just reached through an opaque value.
+subtle = "2"
+# The operator's house lock-free concurrent map: per-tenant admission
+# state (admission.rs) and the token/tenant/routing caches (routing.rs),
+# rebuilt on reconcile. Published crate (operator directive): kovan-map is
+# released to crates.io at 0.1.19, the same version the sibling checkout
+# at ~/projects/kovan currently builds.
+kovan-map = "0.1.19"
+
+[dev-dependencies]
+tempfile = "3"
+ureq = "2"

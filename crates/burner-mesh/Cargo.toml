@@ -1,0 +1,43 @@
+[package]
+name = "burner-mesh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+burner-cell = { path = "../burner-cell" }
+embedded = { path = "../../../defradb.rs/crates/embedded" }
+# Only needed for the `S: storage::corekv::Store` bound on
+# topic_ready::wait_topic_peer, which is generic over the store backend so
+# it serves both burner-cell's cells (EmbeddedNode<EmbeddedStore>) and the
+# Phase 0 spike's (EmbeddedNode<storage::LarkStore>).
+storage = { path = "../../../defradb.rs/crates/storage" }
+query = { path = "../../../defradb.rs/crates/query" }
+# wiring::wire_group joins every wait_topic_peer future with every
+# add_collections future (try_join_all) so every wait's internal subscribe
+# is guaranteed to register before any add_collections's network effects
+# can begin; see that module's doc comment for why sequencing them one
+# after another instead is not reliable.
+futures = { version = "0.3", default-features = false, features = ["std"] }
+# Not a direct dependency: ManagedP2PSystem::ops() returns
+# Arc<dyn defra_http::P2POperations>, and calling trait methods through a
+# trait-object value (unlike a generic T: Trait bound) resolves without the
+# trait's defining crate in scope (confirmed: cargo check flags `use
+# defra_http::P2POperations as _;` here as unused). defra-http reaches this
+# crate transitively via embedded.
+# Unlike defra-http above, this one IS a direct dependency: node.event_bus
+# is `Arc<dyn events::Bus>`, and topic_ready.rs (the D13 primitive) names
+# EventName/Message/Subscription directly by path (not just through method
+# calls on an opaque value), which does require the crate in scope. It is
+# also not reachable through embedded, which does not re-export it.
+events = { path = "../../../defradb.rs/crates/events" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "fs"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
