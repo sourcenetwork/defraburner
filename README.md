@@ -10,6 +10,14 @@ produces exactly two artifacts: the `defraburner` release binary (console
 and default policies compiled in) and the AOT-compiled policy packages
 under `packages/*/`.
 
+![The defraburner console: live cluster stats, the traffic generator, and
+the cluster replication map with one node group per tenant](art/dashboard-overview.png)
+
+The replication map above is drawn from real `connected_peers` data, never
+an idealized full mesh: a solid line is a confirmed live replication link,
+a dashed one is a link that should exist and provably does not, and a
+dotted one is a link that has never been positively confirmed either way.
+
 ## Quickstart
 
 ```bash
@@ -64,19 +72,33 @@ external requests, offline included.
 
 ## Prerequisites
 
-- rustc 1.91 or newer (the workspace's pinned `rust-version`).
-- `libclang` on the system. This is required transitively, not optional:
-  `afterburner`'s QuickJS bindgen (`afterburner-node-compat`) needs it even
-  for this workspace's wasm-only build.
-- [`just`](https://github.com/casey/just).
-- `burn` and `javy` 8.1.1 on `PATH`, build-time only: compiling the policy
-  packages (`just packages`) ahead-of-time compiles them to wasm. Neither
-  is invoked by the shipped binary itself.
-- A sibling checkout at `../defradb.rs`, consumed as an unmodified path
-  dependency: it is not published to crates.io (verified 404), so there is
-  no registry version to depend on instead. `afterburner` and `kovan-map`
-  *are* published, and are consumed from crates.io at their released
-  versions.
+Run `just setup`. It installs the build tooling this repo needs into
+`$HOME/.local/bin` without root, verifies what is already there, and
+reports anything it cannot install itself with the exact command to fix
+it. It is idempotent, so running it again costs nothing.
+
+```sh
+just setup
+```
+
+What it installs: the `burn` CLI (via `https://afterburner.sh`) and `javy`
+8.1.1, pinned and checked against its published SHA-256 before use. Both
+are build-time only, used by `just packages` to compile the policy
+packages ahead of time to wasm; the shipped binary never invokes either.
+`burn compile` requires `javy` on `PATH` and does not fetch it itself,
+which is why setup does.
+
+What it checks and reports rather than installs, since these need a
+package manager: rustc 1.91 or newer (the workspace's pinned
+`rust-version`), `libclang` (required transitively and not optional:
+`afterburner`'s QuickJS bindgen needs it even for this workspace's
+wasm-only build), plus `zstd` and `tar`.
+
+One thing setup cannot do for you: a sibling checkout at `../defradb.rs`,
+consumed as an unmodified path dependency. It is not published to
+crates.io (verified 404), so there is no registry version to depend on
+instead. `afterburner` and `kovan-map` *are* published, and are consumed
+from crates.io at their released versions.
 
 ## What the console gives you
 
