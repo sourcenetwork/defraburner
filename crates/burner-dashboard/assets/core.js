@@ -552,13 +552,10 @@
   }
 
   // ===== Tenant-token GraphQL transport + introspection-based schema
-  // discovery, shared by the traffic generator (view-traffic-gen.js) so
-  // it does not duplicate the field-kind-unwrapping logic. vertexia:
-  // view-console.js's Data view still carries its own closure-local copy
-  // of this same discovery logic (predates this shared helper, already
-  // tested end to end); consolidating it onto this one is a follow-up,
-  // not done here to avoid touching already-verified code under time
-  // pressure. Honest 401/429 handling matches the admin transport.
+  // discovery. This is the ONLY copy: the Data view, the bulk seeder and
+  // the traffic generator all call it, so the collections and fields one
+  // of them shows can never disagree with what another one writes.
+  // Honest 401/429 handling matches the admin transport.
   async function tenantGraphQLRaw(token, query) {
     let response;
     try {
@@ -605,10 +602,26 @@
   }
 
   // Discovers every real collection (via the tenant's own introspection,
-  // no admin access) and its scalar fields, for `token`. Mirrors the
-  // exact discovery rule the Data view uses: a Query field counts as a
-  // real collection only if it carries filter/limit/offset args
-  // (distinguishing it from COUNT/SUM/introspection meta-fields).
+  // no admin access) and its schema fields, for `token`. This is THE
+  // discovery for the whole console: the Data browser, the seeder, and
+  // the traffic generator all read this one map, so a collection can
+  // never be listed one way in one view and another way in the next.
+  //
+  // A Query field counts as a real collection only if it carries
+  // filter/limit/offset args, which is what separates it from the
+  // COUNT/SUM/introspection meta-fields sitting beside it.
+  //
+  // The field list deliberately does NOT come from the collection's
+  // object type. DefraDB generates that type with synthetic members
+  // alongside the schema's own: `_docID`/`_deleted`/`_version` plus the
+  // aggregates COUNT, SUM, AVG, MIN, MAX, SIMILARITY and GROUP. Those
+  // aggregates are scalar-typed and so survive any "keep the scalars"
+  // filter, but selecting one without its target argument is a hard
+  // parse error ("aggregate must be provided with a property to
+  // aggregate"), which failed every generated read. The generated
+  // mutation input type carries exactly the schema's own fields and
+  // nothing else, so that is the source of truth here, and it keeps the
+  // read and write paths agreeing on one field list by construction.
   async function introspectTenantSchema(token) {
     const outcome = await tenantGraphQLRaw(token, '{ __type(name: "Query") { fields { name args { name } } } }');
     if (!outcome.ok || !outcome.json?.data?.__type) {
@@ -621,17 +634,51 @@
       })
       .map((f) => f.name)
       .sort();
+
+    // `add_<Collection>(input: <Collection>MutationInputArg)` names the
+    // input type. Read the name off the schema rather than rebuilding it
+    // by string concatenation: if upstream ever renames the generated
+    // type, this reports a collection with no fields instead of quietly
+    // introspecting a type that does not exist.
+    const mutationOutcome = await tenantGraphQLRaw(
+      token,
+      '{ __type(name: "Mutation") { fields { name args { name type { kind name ofType { kind name ofType { kind name } } } } } } }'
+    );
+    if (!mutationOutcome.ok || !mutationOutcome.json?.data?.__type) {
+      return {
+        collections,
+        fieldsByCollection: new Map(),
+        error: mutationOutcome.message || "introspection returned no Mutation type",
+      };
+    }
+    const inputTypeByCollection = new Map();
+    for (const field of mutationOutcome.json.data.__type.fields) {
+      if (!field.name.startsWith("add_")) continue;
+      const inputArg = (field.args || []).find((a) => a.name === "input");
+      const leaf = inputArg && unwrapGraphQLType(inputArg.type);
+      if (leaf && leaf.name) inputTypeByCollection.set(field.name.slice("add_".length), leaf.name);
+    }
+
     const fieldsByCollection = new Map();
     for (const collection of collections) {
+      const inputTypeName = inputTypeByCollection.get(collection);
+      if (!inputTypeName) {
+        fieldsByCollection.set(collection, []);
+        continue;
+      }
       const fieldOutcome = await tenantGraphQLRaw(
         token,
-        `{ __type(name: ${JSON.stringify(collection)}) { fields { name type { kind name ofType { kind name ofType { kind name } } } } } }`
+        `{ __type(name: ${JSON.stringify(inputTypeName)}) { inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } }`
       );
-      if (!fieldOutcome.ok || !fieldOutcome.json?.data?.__type) continue;
-      const fields = fieldOutcome.json.data.__type.fields
-        .filter((f) => !["_docID", "_deleted", "_version"].includes(f.name))
-        .map((f) => ({ name: f.name, kind: graphqlFieldKind(f.type), isList: graphqlFieldIsList(f.type) }));
-      fieldsByCollection.set(collection, fields);
+      const inputFields = fieldOutcome.json?.data?.__type?.inputFields;
+      if (!fieldOutcome.ok || !inputFields) {
+        fieldsByCollection.set(collection, []);
+        continue;
+      }
+      fieldsByCollection.set(
+        collection,
+        inputFields.map((f) => ({ name: f.name, kind: graphqlFieldKind(f.type), isList: graphqlFieldIsList(f.type) }))
+      );
     }
     return { collections, fieldsByCollection, error: null };
   }

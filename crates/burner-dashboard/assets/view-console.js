@@ -28,7 +28,8 @@
     token: null,
     collections: [],
     collection: null,
-    fields: [], // [{name, kind: 'String'|'Int'|...}]
+    fieldsByCollection: new Map(),
+    fields: [], // [{name, kind: 'String'|'Int'|...}] for the selected collection
     rows: [],
     total: null,
     collectionsError: null,
@@ -71,45 +72,9 @@
 
   // ===== Introspection-driven discovery (D25 addendum: no admin
   // backdoor, discover exactly what a real client would see) ===========
-  async function discoverCollections() {
-    const outcome = await tenantGraphQL(`{ __type(name: "Query") { fields { name args { name } } } }`);
-    if (!outcome.ok) return { collections: [], error: outcome.message };
-    if (!outcome.json?.data?.__type) return { collections: [], error: "introspection returned no Query type" };
-    const collections = outcome.json.data.__type.fields
-      .filter((f) => {
-        const argNames = f.args.map((a) => a.name);
-        return argNames.includes("filter") && argNames.includes("limit") && argNames.includes("offset");
-      })
-      .map((f) => f.name)
-      .sort();
-    return { collections, error: null };
-  }
-
-  function unwrapType(t) {
-    let depth = 0;
-    while (t && t.ofType && depth < 6) { t = t.ofType; depth++; }
-    return t;
-  }
-  function kindOf(fieldType) {
-    const leaf = unwrapType(fieldType);
-    return (leaf && leaf.name) || "String";
-  }
-  function isList(fieldType) {
-    let t = fieldType, depth = 0;
-    while (t && depth < 6) { if (t.kind === "LIST") return true; t = t.ofType; depth++; }
-    return false;
-  }
-
-  async function discoverFields(collection) {
-    const query =
-      `{ __type(name: ${JSON.stringify(collection)}) { fields { name type { kind name ` +
-      `ofType { kind name ofType { kind name ofType { kind name } } } } } } }`;
-    const outcome = await tenantGraphQL(query);
-    if (!outcome.ok || !outcome.json?.data?.__type) return [];
-    return outcome.json.data.__type.fields
-      .filter((f) => !["_deleted", "_version"].includes(f.name))
-      .map((f) => ({ name: f.name, kind: kindOf(f.type), isList: isList(f.type) }));
-  }
+  // Delegated to Burner.introspectTenantSchema, the one discovery shared
+  // with the traffic generator, so this view and the load it generates
+  // can never disagree about which fields a collection has.
 
   function inputTypeFor(kind) {
     switch (kind) {
@@ -159,6 +124,7 @@
     const tenant = B.$("#data-tenant-select").value;
     data.tenant = tenant || null;
     data.collections = []; data.collection = null; data.fields = []; data.rows = []; data.total = null;
+    data.fieldsByCollection = new Map();
     const stored = tenant ? loadStoredToken(tenant) : null;
     B.$("#data-token-input").value = stored || "";
     data.token = stored || null;
@@ -209,9 +175,10 @@
 
   // ===== Collections / schema ===========================================
   async function loadCollections() {
-    const outcome = await discoverCollections();
-    data.collections = outcome.collections;
-    data.collectionsError = outcome.error;
+    const schema = await B.introspectTenantSchema(data.token);
+    data.collections = schema.collections;
+    data.fieldsByCollection = schema.fieldsByCollection;
+    data.collectionsError = schema.error;
   }
   function renderCollections() {
     const list = B.$("#data-collections");
@@ -232,7 +199,7 @@
     data.offset = 0;
     data.filterField = ""; data.filterValue = "";
     renderCollections();
-    data.fields = await discoverFields(name);
+    data.fields = data.fieldsByCollection.get(name) || [];
     renderCreateForm();
     await refreshRows();
   }
