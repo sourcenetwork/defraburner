@@ -779,6 +779,13 @@ fn too_many_requests(retry_after_secs: u64) -> Response {
 /// 30s timeout -> 503"). The one function every mutating admin handler in
 /// `admin_cells`/`admin_tenants`/`admin_autoscaler` calls, so they never
 /// duplicate this error-mapping three ways.
+///
+/// The `Err` variant is an `axum::Response`, which trips
+/// `clippy::result_large_err` at its 128-byte threshold. Boxing it, the
+/// lint's suggested remedy, would add an allocation on every failure and
+/// force a deref at every `?` in the admin handlers, all to shrink a type
+/// that each caller immediately returns as-is: the error IS the response.
+#[allow(clippy::result_large_err)]
 pub(crate) async fn send_supervisor_command<T>(
     state: &GatewayState,
     build_command: impl FnOnce(oneshot::Sender<T>) -> burner_cell::SupervisorCommand,
