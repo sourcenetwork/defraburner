@@ -732,9 +732,22 @@
   // immediately and the actions looked like they never opened).
   // `closeTooltip` therefore closes only a tooltip; an action popover is
   // dismissed by an outside click, Escape, or its own actions.
+  //
+  // The same separation runs the other way too: a tooltip never
+  // supersedes an open action popover. The mesh panel rebuilds its whole
+  // SVG on every one-second overview tick, which re-creates the node
+  // sitting under the pointer and makes the browser fire a fresh
+  // `mouseenter` on it. Without this guard that synthetic hover called
+  // straight through to `closePopover()` below, so the actions the
+  // operator had just clicked open were replaced by a hover tooltip once
+  // per second and the popover looked like it vanished on redraw.
+  // Returns null in exactly that suppressed case; the action path never
+  // sees it, since an action popover always supersedes.
   function openPopoverAt(anchorEl, html, opts) {
+    const kind = (opts && opts.kind) || "action";
+    if (kind === "tooltip" && openPopoverKind === "action") return null;
     closePopover();
-    openPopoverKind = (opts && opts.kind) || "action";
+    openPopoverKind = kind;
     const pop = el(`<div class="ui-popover" role="dialog">${html}</div>`);
     document.body.appendChild(pop);
     const rect = anchorEl.getBoundingClientRect();
