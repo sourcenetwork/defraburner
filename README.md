@@ -114,17 +114,21 @@ the browser, no CLI or curl required.
   (also draining and erasing its cells).
 - **Autoscaler**: change min/max cells, cooldown, and tick interval,
   pause or resume it, force an extra tick, and read the decision timeline.
-- **Data**: pick a tenant, browse its collections and documents, and
-  create, edit, and delete documents through the gateway exactly as an
-  API client would (document filtering here is a simple field-equality
-  match, not the full GraphQL filter grammar), plus a raw GraphQL tab with
-  a copy-as-curl button for anything more expressive or scripted.
+- **Data**: pick a tenant, add a collection to it while it is serving
+  (the SDL is applied on every cell in its group, wired for replication,
+  and folded into its stored schema so a restart recovers it), browse its
+  collections and documents, bulk-seed generated documents, and create,
+  edit, and delete documents through the gateway exactly as an API client
+  would (document filtering here is a simple field-equality match, not the
+  full GraphQL filter grammar), plus a raw GraphQL tab with a
+  copy-as-curl button for anything more expressive or scripted.
 
 Every data operation goes through the same gateway path as a scripted
 client: per-tenant admission applies to it too, and a rate-limited request
 shows its real `Retry-After`. Because tokens are stored only as hashes,
 the console can never display an existing tenant's token back to you:
-only mint a fresh one via rotate. The whole console updates live: a
+only mint a fresh one via rotate, which the Data view offers in place the
+moment you pick a tenant it has no token for. The whole console updates live: a
 one-second SSE tick plus event-driven pushes for cell and decision
 changes, with bounded client-side history and a visible, auto-reconnecting
 connection state.

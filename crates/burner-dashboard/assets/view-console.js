@@ -182,15 +182,92 @@
   }
   function renderCollections() {
     const list = B.$("#data-collections");
-    if (!data.token) { list.innerHTML = '<div class="ui-stat-hint">select a tenant and provide its token first</div>'; return; }
-    if (data.collectionsError) { list.innerHTML = B.banner("error", B.escapeHtml(data.collectionsError)); return; }
-    if (data.collections.length === 0) { list.innerHTML = '<div class="ui-stat-hint">no collections discovered (the schema declares none)</div>'; return; }
+    if (!data.tenant) {
+      list.innerHTML = '<div class="ui-stat-hint">select a tenant above to see its collections</div>';
+      renderNewCollectionForm();
+      return;
+    }
+    // A tenant with no token in this browser used to dead-end here: the
+    // host stores only a token's hash and genuinely cannot show you an
+    // existing one, so the way forward is to mint a fresh one. That is
+    // one click from here now instead of a hunt for the rotate button.
+    if (!data.token) {
+      list.innerHTML =
+        `<div class="ui-stat-hint" style="margin-bottom:8px">no token for '${B.escapeHtml(data.tenant)}' in this browser. The host keeps only a hash of a tenant's token and cannot show you an existing one -- paste it above, or mint a fresh one here.</div>` +
+        `<button type="button" class="btn btn-primary btn-sm" id="data-mint-token">mint a token for ${B.escapeHtml(data.tenant)}</button>` +
+        `<div class="ui-stat-hint" style="margin-top:6px">minting rotates this tenant's token: any client still holding the previous one stops being able to reach it.</div>`;
+      B.$("#data-mint-token", list).addEventListener("click", onRotateToken);
+      renderNewCollectionForm();
+      return;
+    }
+    if (data.collectionsError) {
+      list.innerHTML = B.banner("error", B.escapeHtml(data.collectionsError));
+      renderNewCollectionForm();
+      return;
+    }
     const hint = `<div class="ui-stat-hint" style="margin-bottom:8px">discovered via this tenant's own GraphQL introspection (the same token you gave above, no admin access used)</div>`;
-    list.innerHTML = hint + data.collections
-      .map((c) => `<button type="button" class="btn ${c === data.collection ? "btn-primary" : "btn-secondary"} btn-sm" data-pick-collection="${B.escapeHtml(c)}">${B.escapeHtml(c)}</button>`)
-      .join(" ");
+    list.innerHTML = data.collections.length === 0
+      ? '<div class="ui-stat-hint">this tenant declares no collections yet -- create one below</div>'
+      : hint + data.collections
+        .map((c) => `<button type="button" class="btn ${c === data.collection ? "btn-primary" : "btn-secondary"} btn-sm" data-pick-collection="${B.escapeHtml(c)}">${B.escapeHtml(c)}</button>`)
+        .join(" ");
     B.$all("[data-pick-collection]", list).forEach((btn) => {
       btn.addEventListener("click", () => selectCollection(btn.dataset.pickCollection));
+    });
+    renderNewCollectionForm();
+  }
+
+  // ===== New collection =================================================
+  // Adds collections to a tenant that is already placed and serving, via
+  // POST /admin/tenants/{name}/collections: the SDL is applied on every
+  // cell in the tenant's group, the new collections are wired for
+  // replication, and the tenant's stored schema is updated so a recovery
+  // or a late-joining cell schemas itself the same way. Existing
+  // documents are untouched; this only ever adds.
+  function renderNewCollectionForm() {
+    const host = B.$("#data-new-collection");
+    if (!host) return;
+    if (!data.tenant) { host.innerHTML = ""; return; }
+    host.innerHTML =
+      `<div class="ui-card section-gap"><div class="ui-card-head"><span class="ui-card-title">New collection</span></div>` +
+      `<div class="ui-card-body col">` +
+      `<div class="ui-stat-hint">GraphQL SDL, one or more types. Applied on every cell holding '${B.escapeHtml(data.tenant)}' and wired for replication across them. Adding never touches existing documents.</div>` +
+      `<div class="field">` +
+      `<label for="data-new-collection-sdl">Schema</label>` +
+      `<textarea id="data-new-collection-sdl" class="textarea input-mono" style="min-height:90px" placeholder="type Invoice { number: String\n  amount: Float\n}" data-new-collection-sdl></textarea>` +
+      `</div>` +
+      `<div class="row"><button type="button" class="btn btn-primary" id="data-new-collection-save">add collection</button>` +
+      `<span class="ui-stat-hint" data-new-collection-result></span></div>` +
+      `</div></div>`;
+    B.$("#data-new-collection-save", host).addEventListener("click", onAddCollection);
+  }
+
+  async function onAddCollection() {
+    const btn = B.$("#data-new-collection-save");
+    const result = B.$("[data-new-collection-result]");
+    const sdl = B.$("[data-new-collection-sdl]").value.trim();
+    if (!sdl) { B.showResult(result, false, "enter the collection's SDL first"); return; }
+    await B.withBusy(btn, "adding...", async () => {
+      try {
+        const response = await B.adminFetch(`/admin/tenants/${encodeURIComponent(data.tenant)}/collections`, {
+          method: "POST",
+          body: JSON.stringify({ schema_sdl: sdl }),
+        });
+        if (!response.ok) { B.showResult(result, false, await B.describeFailure(response)); return; }
+        const body = await response.json();
+        B.showResult(result, true, `added ${body.added.join(", ")}`);
+        B.$("[data-new-collection-sdl]").value = "";
+        // The tenant's GraphQL schema changed, so re-introspect rather
+        // than patching the local list: the server's own answer is the
+        // only thing this view ever renders collections from.
+        if (data.token) {
+          await loadCollections();
+          renderCollections();
+          B.showResult(B.$("[data-new-collection-result]"), true, `added ${body.added.join(", ")}`);
+        }
+      } catch (err) {
+        B.showResult(result, false, "request failed: " + err.message);
+      }
     });
   }
 

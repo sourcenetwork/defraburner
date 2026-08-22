@@ -51,6 +51,14 @@ not a dial that was merely accepted.
 - `topic_ready.rs`: `wait_topic_peer`, the deterministic topic-mesh-ready
   wait `wire_group` depends on before it trusts a subscription is live.
 - `reconcile.rs`: `reconcile`, `TenantReady`, `tenant_sdl_path`.
+- `grow.rs`: `add_collections` - adds collections to a tenant that is
+  already placed and serving, without draining or re-placing it. Applies
+  the SDL on every cell in the group, wires the new collections with
+  `wire_group` (the topic-join event really does fire for a subscription
+  that is new in this process, unlike an already-`Placed` tenant's
+  existing ones), then appends to the stored SDL. Cells first, SDL last:
+  a stored SDL naming a collection the cells lack would degrade the
+  tenant on every later reconcile, while the reverse leftover is inert.
 - `static_peers.rs`: `dial_static_peers`, `confirm_dialed_peers`,
   `PeerDialOutcome`.
 

@@ -253,7 +253,7 @@ async fn reconcile_placed(
 /// partially-applied schema (unusual, but not impossible after an
 /// interrupted previous attempt) still needs the real `add_schema` call
 /// to finish registering whatever is missing.
-fn schema_already_registered(
+pub(crate) fn schema_already_registered(
     node: &embedded::EmbeddedNode<embedded::EmbeddedStore>,
     collections: &[String],
 ) -> bool {
@@ -276,7 +276,7 @@ pub fn tenant_sdl_path(data_root: &Path, name: &str) -> PathBuf {
     data_root.join("tenants").join(format!("{name}.graphql"))
 }
 
-async fn load_tenant_sdl(data_root: &Path, name: &str) -> Result<String> {
+pub(crate) async fn load_tenant_sdl(data_root: &Path, name: &str) -> Result<String> {
     let path = tenant_sdl_path(data_root, name);
     tokio::fs::read_to_string(&path).await.with_context(|| {
         format!(
@@ -289,7 +289,7 @@ async fn load_tenant_sdl(data_root: &Path, name: &str) -> Result<String> {
 /// Collection names declared in `sdl`, via upstream's own SDL parser: the
 /// source of truth for what `wire_group`'s `add_collections` call needs to
 /// subscribe.
-fn collection_names(sdl: &str) -> Result<Vec<String>> {
+pub(crate) fn collection_names(sdl: &str) -> Result<Vec<String>> {
     let collections = query::parse_sdl(sdl).map_err(|error| anyhow!("SDL parse error: {error}"))?;
     Ok(collections.into_iter().map(|c| c.name).collect())
 }
@@ -297,7 +297,7 @@ fn collection_names(sdl: &str) -> Result<Vec<String>> {
 /// Looks up every id in `cell_ids` as a live [`RunningCell`], failing
 /// loudly (naming the missing id) rather than silently wiring a partial
 /// group.
-fn resolve_running_cells<'a>(
+pub(crate) fn resolve_running_cells<'a>(
     supervisor: &'a Supervisor,
     cell_ids: &[String],
 ) -> Result<Vec<&'a RunningCell>> {

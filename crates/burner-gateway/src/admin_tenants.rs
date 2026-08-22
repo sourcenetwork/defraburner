@@ -35,6 +35,10 @@ pub(crate) fn router() -> Router<GatewayState> {
             "/admin/tenants/{name}/admission",
             put(admin_set_tenant_admission),
         )
+        .route(
+            "/admin/tenants/{name}/collections",
+            post(admin_add_tenant_collections),
+        )
 }
 
 #[derive(Deserialize)]
@@ -176,6 +180,114 @@ async fn admin_create_tenant(
         }),
     )
         .into_response()
+}
+
+#[derive(Deserialize)]
+struct AddCollectionsRequest {
+    schema_sdl: String,
+}
+
+#[derive(Serialize)]
+struct AddCollectionsResponse {
+    name: String,
+    added: Vec<String>,
+    collections: Vec<String>,
+}
+
+/// `POST /admin/tenants/{name}/collections {schema_sdl}`: adds the
+/// collections `schema_sdl` declares to a tenant that is already placed
+/// and serving, applying them on every cell in its group, wiring them for
+/// replication, and appending them to its stored SDL.
+///
+/// Every request-shaped failure is rejected here, before
+/// `burner_mesh::add_collections` runs, so that anything it returns `Err`
+/// for is a genuine execution failure and maps to a 500: an SDL that does
+/// not parse or declares nothing, a name the tenant already has, an
+/// unknown tenant, and a tenant that is not `Placed` yet are all 400s
+/// naming the specific problem.
+///
+/// Existing documents are untouched; this only ever adds. There is
+/// deliberately no matching remove: dropping a collection would destroy
+/// data, and the two destructive paths that exist (`DELETE
+/// /admin/tenants/{name}` and its `?retire=true` form) already say
+/// plainly what they erase.
+async fn admin_add_tenant_collections(
+    State(state): State<GatewayState>,
+    Path(name): Path<String>,
+    headers: HeaderMap,
+    // `Json` consumes the body, so axum requires it last.
+    Json(request): Json<AddCollectionsRequest>,
+) -> Response {
+    if !is_valid_admin_token(&state, &headers) {
+        return unauthorized("missing or invalid admin token");
+    }
+    let added: Vec<String> = match query::parse_sdl(&request.schema_sdl) {
+        Ok(collections) => collections.into_iter().map(|c| c.name).collect(),
+        Err(error) => return bad_request(&format!("SDL parse error: {error}")),
+    };
+    if added.is_empty() {
+        return bad_request("schema_sdl declares no collections");
+    }
+
+    let manifest = match ClusterManifest::load(&state.data_root).await {
+        Ok(manifest) => manifest,
+        Err(error) => return internal_error(&format!("loading cluster manifest: {error}")),
+    };
+    let Some(tenant) = manifest.tenants.iter().find(|t| t.name == name) else {
+        return not_found(&format!("no tenant '{name}' in the cluster manifest"));
+    };
+    if tenant.status != TenantStatus::Placed {
+        return bad_request(&format!(
+            "tenant '{name}' is not placed yet, so it has no cells to add a collection to"
+        ));
+    }
+
+    let sdl_path = burner_mesh::tenant_sdl_path(&state.data_root, &name);
+    let existing_sdl = match tokio::fs::read_to_string(&sdl_path).await {
+        Ok(sdl) => sdl,
+        Err(error) => {
+            return internal_error(&format!("reading tenant '{name}' schema: {error}"));
+        }
+    };
+    let existing: Vec<String> = match query::parse_sdl(&existing_sdl) {
+        Ok(collections) => collections.into_iter().map(|c| c.name).collect(),
+        Err(error) => {
+            return internal_error(&format!(
+                "tenant '{name}' has a stored schema that no longer parses: {error}"
+            ));
+        }
+    };
+    if let Some(clash) = added.iter().find(|c| existing.contains(c)) {
+        return bad_request(&format!(
+            "tenant '{name}' already has a collection named '{clash}'"
+        ));
+    }
+
+    let result = {
+        let mut supervisor = state.supervisor.lock().await;
+        burner_mesh::add_collections(
+            &mut supervisor,
+            &state.data_root,
+            &name,
+            &request.schema_sdl,
+        )
+        .await
+    };
+    match result {
+        Ok(added) => {
+            let mut collections = existing;
+            collections.extend(added.iter().cloned());
+            Json(AddCollectionsResponse {
+                name,
+                added,
+                collections,
+            })
+            .into_response()
+        }
+        Err(error) => internal_error(&format!(
+            "adding collections to tenant '{name}' failed: {error:#}"
+        )),
+    }
 }
 
 /// Rolls back a tenant creation that failed at the reconcile (place +

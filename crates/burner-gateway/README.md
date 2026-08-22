@@ -69,8 +69,9 @@ re-placement. See `docs/consistency.md` for the full statement.
 - `sse.rs`: `SseHub`, the bounded broadcast-based event stream.
 - `admin_cells.rs` / `admin_tenants.rs` / `admin_autoscaler.rs`: the admin
   control surface - provision/drain/inspect/dial cells; create, drop,
-  drop-and-retire, rotate-token, and admission-override tenants; live
-  min/max/cooldown/tick-interval, pause, and force-tick for the autoscaler.
+  drop-and-retire, rotate-token, admission-override, and add-a-collection
+  for tenants; live min/max/cooldown/tick-interval, pause, and force-tick
+  for the autoscaler.
 
 ## Gotchas / invariants
 

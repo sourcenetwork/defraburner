@@ -306,6 +306,61 @@ fn probe_tenants_admission_override(ctx: &ProbeCtx) -> u16 {
     )
 }
 
+/// Adds a collection to a tenant of this probe's own, never the shared
+/// fixture: the call mutates the tenant's stored schema and its cells'
+/// live collection set, which every other probe reading the fixture would
+/// then see.
+fn probe_tenants_add_collection(ctx: &ProbeCtx) -> u16 {
+    let tenant = make_disposable_tenant(ctx, "cov-addcoll-probe");
+    let token = tenant["token"]
+        .as_str()
+        .expect("disposable tenant token")
+        .to_string();
+    let (status, body) = post_json(
+        &format!(
+            "{}/admin/tenants/cov-addcoll-probe/collections",
+            ctx.base_url
+        ),
+        &ctx.admin_token,
+        serde_json::json!({ "schema_sdl": "type Gizmo { label: String }" }),
+    );
+    assert_eq!(
+        status, 200,
+        "adding a collection to a freshly placed tenant should succeed: {body:?}"
+    );
+    assert_eq!(
+        body["added"],
+        serde_json::json!(["Gizmo"]),
+        "the response should name exactly the collection that was added: {body:?}"
+    );
+    // The point of the capability is that the tenant can now actually
+    // USE the collection, so prove it through the tenant's own data
+    // plane rather than trusting the admin response. A route that
+    // answered 200 while leaving the cells unable to serve the new
+    // collection would pass a status-only check and still be broken.
+    let (write_status, write_body) = post_json(
+        &format!("{}/api/v0/graphql", ctx.base_url),
+        &token,
+        serde_json::json!({
+            "query": "mutation { add_Gizmo(input: [{label: \"probe\"}]) { _docID label } }"
+        }),
+    );
+    assert_eq!(
+        write_status, 200,
+        "writing to a just-added collection should succeed: {write_body:?}"
+    );
+    assert!(
+        write_body["errors"].is_null(),
+        "writing to a just-added collection should not return GraphQL errors: {write_body:?}"
+    );
+    assert_eq!(
+        write_body["data"]["add_Gizmo"][0]["label"],
+        serde_json::json!("probe"),
+        "the document written to the new collection should read back: {write_body:?}"
+    );
+    status
+}
+
 fn probe_autoscaler_get(ctx: &ProbeCtx) -> u16 {
     get(
         &format!("{}/admin/api/overview", ctx.base_url),
@@ -454,6 +509,12 @@ const TABLE: &[Row] = &[
         js_marker: "data-admission-save",
         human_name: "tenants: admission override",
         probe: probe_tenants_admission_override,
+    },
+    Row {
+        path_pattern: "/admin/tenants/{name}/collections",
+        js_marker: "data-new-collection-save",
+        human_name: "tenants: add a collection",
+        probe: probe_tenants_add_collection,
     },
     Row {
         path_pattern: "autoscaler_control: AutoscalerControlView",

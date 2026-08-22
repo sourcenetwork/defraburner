@@ -11,6 +11,7 @@
 //! plain and safe to `.await` directly on the caller's task; none of it may
 //! be wrapped in `tokio::spawn`.
 
+pub mod grow;
 pub mod placement;
 pub mod reconcile;
 pub mod static_peers;
@@ -38,6 +39,7 @@ pub fn peer_id_of(entry: &str) -> &str {
     }
 }
 
+pub use grow::add_collections;
 pub use placement::place;
 pub use reconcile::{TenantOutcome, TenantReady, reconcile, tenant_sdl_path};
 pub use static_peers::{PeerDialOutcome, confirm_dialed_peers, dial_static_peers};
