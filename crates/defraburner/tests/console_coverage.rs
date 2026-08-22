@@ -204,9 +204,18 @@ fn make_disposable_cell(ctx: &ProbeCtx) -> String {
         status, 200,
         "provisioning a disposable cell should succeed: {body:?}"
     );
+    // `POST /admin/cells` answers 200 with a per-cell outcome, so a
+    // failed attempt arrives as `{"error": ...}` with no id rather than a
+    // non-200. Surface that error text: a bare "expected an id" tells a
+    // future reader nothing about why the cell could not be provisioned.
     body["cells"][0]["id"]
         .as_str()
-        .expect("provisioned cell id")
+        .unwrap_or_else(|| {
+            panic!(
+                "provisioning a disposable cell returned no id; outcome: {}",
+                body["cells"][0]
+            )
+        })
         .to_string()
 }
 
