@@ -2156,10 +2156,6 @@ dependencies = [
  "crdt",
  "crypto",
  "datastore",
- "db-blocks",
- "db-index",
- "db-nac",
- "db-search",
  "defra-core",
  "document",
  "events",
@@ -2168,128 +2164,26 @@ dependencies = [
  "identity",
  "kms",
  "lens",
- "multihash",
- "parking_lot 0.12.5",
- "query",
- "rand 0.8.7",
- "schema",
- "serde",
- "serde_bytes",
- "serde_json",
- "sha2 0.10.9",
- "storage",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "web-time",
- "zeroize",
-]
-
-[[package]]
-name = "db-blocks"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "blockstore",
- "bytes",
- "ciborium",
- "cid",
- "crypto",
- "datastore",
- "defra-core",
- "document",
- "hex",
- "kms",
- "multihash",
- "rand 0.8.7",
- "serde",
- "sha2 0.10.9",
- "storage",
- "tracing",
-]
-
-[[package]]
-name = "db-index"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "datastore",
- "defra-core",
- "document",
- "schema",
- "serde",
- "storage",
- "thiserror 2.0.20",
- "tracing",
-]
-
-[[package]]
-name = "db-merge"
-version = "0.5.0"
-dependencies = [
- "acp",
- "async-lock",
- "async-trait",
- "blockstore",
- "bytes",
- "ciborium",
- "cid",
- "crdt",
- "crypto",
- "datastore",
- "db",
- "db-blocks",
- "defra-core",
- "document",
- "events",
- "futures",
- "hex",
- "identity",
- "kms",
  "libp2p",
+ "multihash",
  "p2p",
  "parking_lot 0.12.5",
  "query",
+ "rand 0.8.7",
+ "reqwest 0.12.28",
  "schema",
  "serde",
  "serde_bytes",
  "serde_json",
+ "sha2 0.10.9",
  "storage",
  "telemetry",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
  "wasm-bindgen-futures",
+ "web-time",
  "zeroize",
-]
-
-[[package]]
-name = "db-nac"
-version = "0.5.0"
-dependencies = [
- "acp",
- "async-trait",
- "defra-core",
- "identity",
- "serde",
- "storage",
- "thiserror 2.0.20",
- "tracing",
-]
-
-[[package]]
-name = "db-search"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "document",
- "query",
- "reqwest 0.12.28",
- "schema",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tracing",
 ]
 
 [[package]]
@@ -2380,7 +2274,6 @@ dependencies = [
  "chrono",
  "cid",
  "db",
- "db-merge",
  "defra-core",
  "defra-http",
  "document",
@@ -2760,7 +2653,6 @@ dependencies = [
  "cid",
  "crypto",
  "db",
- "db-merge",
  "defra-core",
  "defra-http",
  "defra-p2p-adapter",
@@ -6220,7 +6112,6 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
- "crdt",
  "crypto",
  "defra-core",
  "document",
@@ -6235,6 +6126,7 @@ dependencies = [
  "kms",
  "libp2p",
  "libp2p-stream",
+ "lru 0.16.4",
  "multiaddr",
  "multihash-codetable",
  "noq",
@@ -6914,80 +6806,30 @@ version = "0.5.0"
 dependencies = [
  "acp",
  "async-graphql",
+ "async-lock",
  "async-trait",
  "base64",
  "bm25",
  "chrono",
  "ciborium",
- "defra-core",
- "document",
- "graphql-parser",
- "identity",
- "lens",
- "query-parse",
- "query-plan",
- "query-types",
- "schema",
- "serde",
- "serde_json",
- "storage",
- "tokio",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "query-parse"
-version = "0.5.0"
-dependencies = [
- "chrono",
- "cid",
- "graphql-parser",
- "query-types",
- "regex",
- "schema",
- "serde_json",
- "sha2 0.10.9",
- "tracing",
-]
-
-[[package]]
-name = "query-plan"
-version = "0.5.0"
-dependencies = [
- "acp",
- "async-lock",
- "async-trait",
- "chrono",
  "cid",
  "cursor",
  "defra-core",
  "document",
  "futures",
+ "graphql-parser",
  "identity",
  "lens",
- "query-types",
- "schema",
- "serde_json",
- "storage",
- "tokio",
- "tracing",
- "web-time",
-]
-
-[[package]]
-name = "query-types"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "chrono",
- "document",
+ "regex",
  "schema",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "storage",
  "thiserror 2.0.20",
+ "tokio",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
