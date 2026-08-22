@@ -50,12 +50,17 @@
         );
       })
       .join("");
-    B.$("#cells-tbody").innerHTML = rows;
-
-    B.$all("[data-toggle]", B.$("#cells-tbody")).forEach((btn) => {
-      btn.addEventListener("click", () => toggleRow(btn.dataset.toggle));
+    // The tick rebuild would otherwise erase a peer multiaddr mid-typing
+    // and the result line of an action that just finished, both of which
+    // live inside an expanded row's markup.
+    const tbody = B.$("#cells-tbody");
+    B.preserveVolatile(tbody, () => {
+      tbody.innerHTML = rows;
+      B.$all("[data-toggle]", tbody).forEach((btn) => {
+        btn.addEventListener("click", () => toggleRow(btn.dataset.toggle));
+      });
+      wireRowActions();
     });
-    wireRowActions();
   }
 
   function toggleRow(cellId) {

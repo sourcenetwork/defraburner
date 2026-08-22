@@ -57,8 +57,14 @@
         );
       })
       .join("");
-    B.$("#tenants-tbody").innerHTML = rows;
-    wireActions(tenants);
+    // Same reason as the Cells table: the per-tenant admission rate and
+    // burst inputs live in this markup, so a plain tick rebuild erased
+    // an override while it was still being typed.
+    const tbody = B.$("#tenants-tbody");
+    B.preserveVolatile(tbody, () => {
+      tbody.innerHTML = rows;
+      wireActions(tenants);
+    });
   }
 
   function renderActions(tenant) {

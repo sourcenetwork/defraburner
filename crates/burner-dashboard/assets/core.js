@@ -219,10 +219,96 @@
   // paraphrase) in the error color on failure, so a 409's tenant name, a
   // 429's Retry-After, and a 503's timeout reason all reach the operator
   // exactly as the gateway wrote them.
+  //
+  // The outcome is also recorded against the element's own data-attribute
+  // identity, because several of these result lines live inside markup a
+  // view rebuilds on every one-second tick. Without the record, a result
+  // was erased within a second of being written and an operator could not
+  // read whether their own action had succeeded. `preserveVolatile` below
+  // replays it onto the rebuilt element.
+  const recentResults = new Map(); // data-selector -> {ok, text, at}
+  const RESULT_TTL_MS = 20000;
   function showResult(el, ok, text) {
     if (!el) return;
     el.textContent = text;
     el.style.color = ok ? "" : "var(--state-error)";
+    const selector = dataSelectorFor(el);
+    if (!selector) return;
+    if (text === "") recentResults.delete(selector);
+    else recentResults.set(selector, { ok, text, at: Date.now() });
+  }
+
+  // ===== Volatile UI state across a live redraw =========================
+  // The Cells and Tenants tables rebuild their whole body with innerHTML
+  // on every overview tick. Anything the operator is in the middle of
+  // lives in that markup: a half-typed peer multiaddr, an admission
+  // override being edited, the result line an action just wrote. Rebuilt
+  // once a second, those controls were unusable, since a value could not
+  // survive long enough to be submitted.
+  //
+  // These two helpers carry that state across the rebuild, keyed by each
+  // element's own `data-*` attribute rather than by object identity, so
+  // it survives the DOM nodes themselves being replaced.
+  function dataSelectorFor(el) {
+    const keys = Object.keys(el.dataset || {});
+    if (keys.length === 0) return null;
+    const attr = "data-" + keys[0].replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+    const value = el.dataset[keys[0]];
+    const escaped = window.CSS && window.CSS.escape ? window.CSS.escape(value) : value.replace(/"/g, '\\"');
+    return `[${attr}="${escaped}"]`;
+  }
+  // Runs `rebuild`, restoring the operator's in-progress state afterwards.
+  // `root` bounds the capture to the subtree being rebuilt.
+  // Fields the operator has actually typed into, keyed by data-selector
+  // since the elements themselves are replaced on every rebuild. Only
+  // these are carried across: restoring every captured value instead
+  // would let a stale capture mask a change the server made to the same
+  // setting. The consequence, deliberately: for a field you have edited,
+  // your value outranks a later server value until you change it again.
+  const dirtyFields = new Set();
+  document.addEventListener(
+    "input",
+    (event) => {
+      const selector = event.target && event.target.dataset ? dataSelectorFor(event.target) : null;
+      if (selector) dirtyFields.add(selector);
+    },
+    true
+  );
+  function preserveVolatile(root, rebuild) {
+    const fields = [];
+    $all("input, textarea, select", root).forEach((el) => {
+      const selector = dataSelectorFor(el);
+      if (!selector) return;
+      if (!dirtyFields.has(selector) && el !== document.activeElement) return;
+      // `selectionStart` is not available on every input type (number
+      // among them), and reading it throws on some: a caret that cannot
+      // be read simply is not restored, which never blocks the value.
+      let start = null;
+      let end = null;
+      try { start = el.selectionStart; end = el.selectionEnd; } catch (err) { /* no caret on this type */ }
+      fields.push({ selector, value: el.value, focused: el === document.activeElement, start, end });
+    });
+
+    rebuild();
+
+    for (const field of fields) {
+      const el = $(field.selector, root);
+      if (!el) continue;
+      el.value = field.value;
+      if (!field.focused) continue;
+      el.focus();
+      if (field.start === null) continue;
+      try { el.setSelectionRange(field.start, field.end); } catch (err) { /* no caret on this type */ }
+    }
+
+    const now = Date.now();
+    for (const [selector, entry] of recentResults) {
+      if (now - entry.at > RESULT_TTL_MS) { recentResults.delete(selector); continue; }
+      const el = $(selector, root);
+      if (!el) continue;
+      el.textContent = entry.text;
+      el.style.color = entry.ok ? "" : "var(--state-error)";
+    }
   }
   async function describeFailure(response) {
     const text = await response.text().catch(() => `HTTP ${response.status}`);
@@ -821,6 +907,7 @@
     markerFor, markerSvg, markerShapeMarkup, hashToIndex, singleCellNote,
     tenantGraphQLRaw, introspectTenantSchema, graphqlFieldKind, graphqlFieldIsList,
     registerViewEntry, enterView,
+    preserveVolatile,
     openPopoverAt, closePopover, closeTooltip,
     ICONS,
     initTheme, initTokenGate, initSidebar,
