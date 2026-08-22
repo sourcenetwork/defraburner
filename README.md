@@ -212,7 +212,7 @@ inbound dial from another process or host to cell 2 and beyond is not.
 Cross-host meshes should dial out from later-ignited cells toward earlier
 ones until this is fixed upstream. Full repro and detail:
 [`docs/upstream/defradb-rs-second-listener-dies.md`](docs/upstream/defradb-rs-second-listener-dies.md).
-It is why the test suite sits at 159/160: the one red test is kept
+It is why the test suite sits at 223/224: the one red test is kept
 deliberately, as the regression detector for the fix.
 
 Named deferred work - WASM-hosted cells, document-hash sharding,

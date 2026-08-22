@@ -4,6 +4,104 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D35 (2026-08-21): add collections to a live tenant
+
+Operator, using the console: "there is no collection selection or
+creation there". Two distinct gaps behind one sentence, both closed.
+
+SELECTION was present but dead-ended: the Data view's collection list
+refused to load without a tenant token, and the host stores only a
+token's hash, so it genuinely cannot show an existing one. The way
+forward (rotate to mint a fresh one) sat in a different card with no
+pointer to it. The empty state now says why it cannot show the token and
+offers the mint button in place, stating plainly that minting rotates the
+token and cuts off any client still holding the old one.
+
+CREATION did not exist: a tenant's collections were fixed at creation
+time by its `schema_sdl`. Added `POST /admin/tenants/{name}/collections`
+plus `burner_mesh::grow::add_collections`, which applies the SDL on every
+cell in the tenant's group, wires the new collections for replication
+with `wire_group`, and appends them to the tenant's stored SDL.
+
+Decisions inside that:
+
+- `wire_group`, not `ensure_group_connected`. D25 established that an
+  already-`Placed` tenant's EXISTING collections cannot be confirmed via
+  the edge-triggered topic-join event, because upstream restores those
+  subscriptions from disk before reconcile runs. A collection being added
+  now is genuinely new in this process, so that event really does still
+  fire and waiting on it is meaningful again.
+- Cells first, stored SDL last. A stored SDL naming a collection the
+  cells lack would make every later reconcile fail to resolve it,
+  degrading the tenant on that restart and every one after. The reverse
+  leftover (registered on a cell, absent from the SDL) is inert: nothing
+  wires it, routes to it, or writes to it. Applying per cell is
+  idempotent (skips a cell that already has every collection), so a retry
+  after a partial failure finishes the job.
+- Add only, no remove. Dropping a collection destroys data; the two
+  destructive paths that already exist say plainly what they erase.
+- Every request-shaped failure is rejected in the handler before the mesh
+  function runs (unparseable SDL, a name the tenant already has, unknown
+  tenant, tenant not yet `Placed`), so anything the mesh function returns
+  Err for is a real execution failure and a 500.
+
+Verified live, not just unit-tested: added `Torpedo` to a serving tenant,
+wrote and read a document through the tenant's own data plane, restarted
+the cluster, and read the document back. The console-coverage contract
+gained a row whose probe asserts the same data-plane write, so a route
+that answered 200 while leaving the cells unable to serve the collection
+would fail rather than pass a status-only check.
+
+Reversible: the endpoint, the module, and the form can be removed; a
+collection already added stays, as any other collection would.
+
+## D34 (2026-08-21): three console defects found by running it
+
+All three were found by the operator running the binary, and all three
+share a shape: a per-tick redraw destroying state the operator was in the
+middle of using.
+
+- EVERY GENERATED READ FAILED (438 errors against 169 writes in the
+  traffic generator, and the Data browser's document list too). The field
+  list came from the collection's generated GraphQL object type, which
+  carries DefraDB's synthetic members beside the schema's own: `_docID`,
+  `_deleted`, `_version` and the aggregates COUNT, SUM, AVG, MIN, MAX,
+  SIMILARITY, GROUP. The aggregates are scalar-typed, so they survived a
+  "keep the scalars" filter, and selecting one without its target
+  argument is a parse error. Writes survived only because DefraDB's
+  mutation input parser ignores keys it does not know. Fixed by taking
+  the field list from the generated mutation input type
+  (`<Collection>MutationInputArg`), which contains exactly the schema's
+  own fields: the schema's own answer to the question, so it cannot drift
+  when upstream adds another aggregate. The input type's name is read off
+  `add_<Collection>` rather than string-built, so an upstream rename
+  surfaces as "no fields" instead of a wrong guess. The Data view's
+  duplicate copy of this discovery was deleted; there is now one.
+- THE MESH ACTION POPOVER VANISHED ONCE A SECOND. The panel rebuilds its
+  SVG every tick, which re-creates the node under the pointer and makes
+  the browser fire a fresh `mouseenter`; the tooltip handler called
+  `openPopoverAt`, whose first act is `closePopover()`. The separation
+  D25 introduced (a node's `mouseleave` must not close a clicked action
+  popover) now runs both ways: a tooltip never supersedes an open action
+  popover either.
+- KNOBS INSIDE TICK-REBUILT TABLES WERE UNUSABLE. The Cells dial input
+  and the Tenants admission rate/burst inputs live in markup rebuilt
+  every second, so a value could not survive long enough to be submitted,
+  and an action's result line was erased within a second of being
+  written. Added `preserveVolatile`, which carries the operator's
+  in-progress state across a rebuild keyed by each element's own
+  data-attribute. Only fields the operator actually typed into are
+  carried, tracked by a delegated `input` listener: restoring every
+  captured value instead would let a stale capture mask a change the
+  server made to the same setting. The deliberate consequence, recorded
+  because it is a real trade: for a field you have edited, your value
+  outranks a later server value until you change it again.
+
+Also fixed in passing: `mesh-panel.js` contained three raw NUL bytes used
+as a composite-key separator. Valid JavaScript, but it made the file
+binary to every text tool (`grep` went silently empty on it, which is how
+it was found). Same value, written as `\u0000`.
+
 ## D32 (2026-08-19): live-run bugs: tenant reconcile must be isolated
 
 Operator ran the binary and hit real failures. Diagnosis from their log:

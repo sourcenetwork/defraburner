@@ -50,7 +50,7 @@ Honest open gaps (tracked, not hidden; updated after Phase 0):
   later cells toward first cells until defradb.rs fixes the listener
   lifetime. Full repro: docs/upstream/defradb-rs-second-listener-dies.md.
   The two-process mesh test stays in the suite as the regression detector
-  and is the one non-green test (159/160).
+  and is the one non-green test (223/224).
 - Verified in Phase 0: Libp2pConfig carries only listen_addr, but upstream
   persists the libp2p keypair in the cell's own peerstore, so stable peer IDs
   across restart come free (golden-test-asserted in Phase 1). The signing
