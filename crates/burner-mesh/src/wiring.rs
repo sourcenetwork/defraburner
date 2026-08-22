@@ -240,7 +240,7 @@ pub async fn wire_group(
 /// comment for the verified upstream source lines). Deliberately never
 /// waits on a topic-join event: see `wire_group`'s doc comment for why
 /// that wait is unobservable here specifically. A cell that cannot be
-/// positively confirmed connected within [`CONNECT_CONFIRM_TIMEOUT`] is a
+/// positively confirmed connected within `CONNECT_CONFIRM_TIMEOUT` is a
 /// real, observable problem, not an unobservable one, so it still fails
 /// this call (and, up the stack, degrades the tenant, naming the reason).
 pub async fn ensure_group_connected(cells: &[&RunningCell], collections: &[String]) -> Result<()> {
