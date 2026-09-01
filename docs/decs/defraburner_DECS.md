@@ -4,6 +4,40 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D41 (2026-09-01): the autoscaler grows but does not shrink
+
+Operator direction: "autoscaler must not scale down ok? for this poc let
+it spawn more", plus a dashboard control to disable the autoscaler.
+
+- Options: (a) edit the `autoscale-default` policy package to stop
+  proposing scale_down; (b) veto scale_down in the Rust clamp; (c) leave
+  the behaviour and only add a UI toggle.
+- Chosen: (b), with the toggle.
+- Why: a policy proposes and the clamp decides, which is the trust
+  boundary this project already has. Editing the package would leave the
+  guardrail still authorizing removal, so any other policy (an override, a
+  future package) would shrink the cluster again. Vetoing in the clamp
+  makes the property hold for every policy, present and future.
+- Scale-down became data-destroying when fibers became cells (D40):
+  draining a cell now destroys the wasm database it owns. An automatic
+  removal is therefore a data-loss action taken with no operator in the
+  loop, which is not a trade worth making for a proof of concept.
+  Removal stays explicit: `DELETE /admin/cells/{id}`.
+- Default is off, and off is the direction a missing value drifts:
+  `#[serde(default)]` on a `bool` is `false`, so a manifest written before
+  the field existed also loads with removal disabled.
+- Both bools (`paused`, `scale_down_enabled`) are always written to the
+  manifest rather than omitted when false, so an operator reading
+  `cluster.json` sees the safety posture stated rather than inferred from
+  an absent key. A serialization test pins the exact shape.
+- The dashboard gained two switches: "disable the autoscaler" (the
+  existing pause, relabelled to say what it does) and "allow scale down",
+  which is off by default and says why in place.
+- Affects: burner-cell manifest/command, burner-policy clamp/autoscaler,
+  burner-gateway admin_autoscaler + overview, the Autoscaler view.
+- Reversible: yes, it is a knob; turning it on restores the prior
+  behaviour exactly.
+
 ## D40 (2026-09-01): fibers are cells
 
 Operator direction, verbatim: "fibers = cells". A fiber is not a separate
@@ -27,12 +61,17 @@ DefraDB, sharing the cell's id and lifetime.
   autoscaler scaling an idle cell down took that cell's database with it
   without any fiber-specific code in the autoscaler, which is the whole
   point of the unification.
-- Measured while building this (honesty fence): regolith does **not** lock
-  its directory. A second fiber opened on a live directory succeeds. So
-  the single-writer guarantee is structural, not enforced by the store:
-  one fiber per cell, a directory derived from the cell id, and a manifest
-  that already refuses a duplicate id. Two tests pin this, and neither
-  claims a guarantee the stack does not provide.
+- Measured while building this, and corrected once observed properly
+  (honesty fence): regolith **does** lock, but only on native targets. A
+  native cell's store carries a `LOCK` file; the same store opened by the
+  wasm guest does not, because WASI preview1 has no `flock`. A second
+  fiber opened on a live directory therefore succeeds, which a second
+  native store would not.
+  So for fibers specifically the single-writer guarantee is structural,
+  not enforced by the store: one fiber per cell, a directory derived from
+  the cell id, and a manifest that already refuses a duplicate id. Two
+  tests pin this, and neither claims a guarantee the stack does not
+  provide on this target.
 - Not done here, and gated on the mesh bridge: tenant traffic still routes
   to the cell's native embedded node, because a wasm database cannot
   replicate (no sockets in WASI preview1). Routing tenants at fibers

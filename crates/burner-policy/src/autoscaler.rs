@@ -52,6 +52,9 @@ pub struct AutoscalerConfig {
     /// (matches `provision_fresh`'s existing IPv4-only convention).
     pub bind_addr: IpAddr,
     pub base_port: u16,
+    /// Whether the autoscaler may remove cells (D41). Off by default:
+    /// draining a cell destroys the wasm database it owns.
+    pub scale_down_enabled: bool,
 }
 
 /// Live, shared autoscaler control (console round, D23): the CLI-derived
@@ -91,6 +94,10 @@ impl AutoscalerControl {
                 .unwrap_or(self.base.tick_interval),
             bind_addr: self.base.bind_addr,
             base_port: self.base.base_port,
+            // The override is a plain bool rather than an Option: absent
+            // means "off", which is the safe direction, and there is no
+            // third state a caller could mean.
+            scale_down_enabled: overrides.scale_down_enabled,
         }
     }
 
@@ -122,6 +129,9 @@ impl AutoscalerControl {
         }
         if let Some(v) = patch.tick_interval_secs {
             candidate.tick_interval_secs = Some(v);
+        }
+        if let Some(v) = patch.scale_down_enabled {
+            candidate.scale_down_enabled = v;
         }
         if let Some(v) = patch.paused {
             candidate.paused = v;
@@ -544,6 +554,7 @@ async fn run_autoscale_step(
         free_cells_oldest_first,
         seconds_since_last_action: last_action_at.map(|at| at.elapsed().as_secs()),
         cooldown_secs: config.cooldown_secs,
+        scale_down_enabled: config.scale_down_enabled,
     };
     let plan = clamp::clamp_autoscale(&decision, &clamp_ctx);
 

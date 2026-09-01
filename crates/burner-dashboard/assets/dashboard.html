@@ -271,12 +271,19 @@
                 <span id="autoscaler-save-result" class="ui-stat-hint"></span>
               </div>
               <div class="row" style="border-top:1px solid var(--border-subtle);padding-top:14px;margin-top:4px">
-                <button type="button" id="autoscaler-pause-toggle" class="toggle" role="switch" aria-checked="false" aria-label="Pause the autoscaler"></button>
-                <span class="fg-2">pause the autoscaler</span>
+                <button type="button" id="autoscaler-pause-toggle" class="toggle" role="switch" aria-checked="false" aria-label="Disable the autoscaler"></button>
+                <span class="fg-2">disable the autoscaler</span>
                 <span id="autoscaler-pause-result" class="ui-stat-hint"></span>
                 <span class="spacer"></span>
                 <button type="button" id="autoscaler-force-tick" class="btn btn-secondary">force tick</button>
                 <span id="autoscaler-tick-result" class="ui-stat-hint"></span>
+              </div>
+              <div class="row" style="border-top:1px solid var(--border-subtle);padding-top:14px;margin-top:4px">
+                <button type="button" id="autoscaler-scaledown-toggle" class="toggle" role="switch" aria-checked="false" aria-label="Allow the autoscaler to remove cells"></button>
+                <span class="fg-2">allow scale down</span>
+                <span id="autoscaler-scaledown-result" class="ui-stat-hint"></span>
+                <span class="spacer"></span>
+                <span class="fg-3" style="font-size:12px">off by default: draining a cell destroys the wasm database it owns</span>
               </div>
             </div>
           </div>

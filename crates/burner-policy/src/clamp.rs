@@ -45,6 +45,12 @@ pub struct AutoscaleClampContext {
     /// has executed yet this process (never blocked by cooldown).
     pub seconds_since_last_action: Option<u64>,
     pub cooldown_secs: u64,
+    /// Whether removing a cell is authorized at all (D41). When false,
+    /// every `scale_down` is refused here, in the Rust guardrail, rather
+    /// than by asking the policy package not to propose one: a policy
+    /// proposes, this module decides, and a destructive action must be
+    /// vetoed on the deciding side.
+    pub scale_down_enabled: bool,
 }
 
 /// Validates and clamps a raw [`AutoscaleDecision`] into a [`ClampedPlan`]
@@ -93,6 +99,15 @@ pub fn clamp_autoscale(decision: &AutoscaleDecision, ctx: &AutoscaleClampContext
             } else {
                 Some(ClampedAction::ScaleUp)
             }
+        }
+        ScaleAction::ScaleDown if !ctx.scale_down_enabled => {
+            clamps.push(
+                "scale_down requested but scale-down is disabled: holding. Draining a \
+                 cell destroys the wasm database it owns, so removal is an explicit \
+                 operator action (DELETE /admin/cells/{id})"
+                    .to_string(),
+            );
+            None
         }
         ScaleAction::ScaleDown => {
             if clamped_target >= ctx.current_cell_count {
@@ -204,7 +219,56 @@ mod tests {
             free_cells_oldest_first: vec!["cell-0".to_string(), "cell-1".to_string()],
             seconds_since_last_action: None,
             cooldown_secs: 60,
+            // The existing scale_down cases below exercise the min/free-cell
+            // logic, which only runs once removal is authorized at all, so
+            // this helper authorizes it. The disabled path has its own
+            // tests directly beneath them.
+            scale_down_enabled: true,
         }
+    }
+
+    #[test]
+    fn scale_down_is_refused_when_removal_is_disabled() {
+        let mut ctx = autoscale_ctx();
+        ctx.scale_down_enabled = false;
+        let plan = clamp_autoscale(&decision(ScaleAction::ScaleDown, 1), &ctx);
+        assert!(
+            plan.actions.is_empty(),
+            "no action may be authorized when scale-down is disabled"
+        );
+        assert!(
+            plan.clamps_applied
+                .iter()
+                .any(|c| c.contains("scale-down is disabled")),
+            "the refusal must say why: {:?}",
+            plan.clamps_applied
+        );
+    }
+
+    #[test]
+    fn disabling_scale_down_does_not_block_scale_up() {
+        let mut ctx = autoscale_ctx();
+        ctx.scale_down_enabled = false;
+        let plan = clamp_autoscale(&decision(ScaleAction::ScaleUp, 3), &ctx);
+        assert_eq!(
+            plan.actions,
+            vec![ClampedAction::ScaleUp],
+            "growth must still be authorized: {:?}",
+            plan.clamps_applied
+        );
+    }
+
+    #[test]
+    fn disabling_scale_down_leaves_hold_alone() {
+        let mut ctx = autoscale_ctx();
+        ctx.scale_down_enabled = false;
+        let plan = clamp_autoscale(&decision(ScaleAction::Hold, 2), &ctx);
+        assert!(plan.actions.is_empty());
+        assert!(
+            plan.clamps_applied.is_empty(),
+            "a hold is not a refusal and needs no clamp note: {:?}",
+            plan.clamps_applied
+        );
     }
 
     fn decision(action: ScaleAction, target_cells: u64) -> AutoscaleDecision {

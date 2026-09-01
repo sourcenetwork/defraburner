@@ -193,6 +193,9 @@ pub async fn run(
         tick_interval,
         bind_addr: bind,
         base_port,
+        // The base config never authorizes removal; only the manifest
+        // override (settable from the dashboard) can turn it on. D41.
+        scale_down_enabled: false,
     };
     let autoscaler_control = Arc::new(AutoscalerControl::new(autoscaler_config, autoscaler_spec));
 

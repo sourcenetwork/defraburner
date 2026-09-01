@@ -216,22 +216,25 @@ fn separate_fibers_hold_separate_databases() {
     b.shutdown().expect("clean shutdown b");
 }
 
-/// Measured, and load-bearing: regolith does **not** lock its directory.
+/// Measured, and load-bearing: regolith's directory lock is native-only.
 ///
-/// A second fiber opened on a live directory succeeds rather than being
-/// refused, so nothing at the storage layer stops two writers from
-/// corrupting one database. That makes the ownership rule structural
-/// rather than advisory: a cell owns exactly one fiber (D40), its
-/// directory is a pure function of its id (`cell_fiber_dir`), and the
-/// cluster manifest already refuses a duplicate cell id. Those three
-/// together are the whole protection.
+/// A native store writes a `LOCK` file; the same store opened from the
+/// wasm guest does not, because WASI preview1 has no `flock`. So on this
+/// target a second fiber opened on a live directory succeeds rather than
+/// being refused, and nothing at the storage layer stops two writers from
+/// corrupting one database.
+///
+/// That makes the ownership rule structural rather than advisory: a cell
+/// owns exactly one fiber (D40), its directory is a pure function of its
+/// id (`cell_fiber_dir`), and the cluster manifest already refuses a
+/// duplicate cell id. Those three together are the whole protection.
 ///
 /// This test pins the finding so it cannot silently change, and pins the
 /// derivation that depends on it. It deliberately does not assert that
 /// the second open fails: it does not, and asserting otherwise would be
 /// claiming a guarantee this stack does not provide.
 #[test]
-fn a_second_open_is_not_refused_so_directory_derivation_is_the_guard() {
+fn a_second_wasm_open_is_not_refused_so_directory_derivation_is_the_guard() {
     let Some(image) = image() else { return };
     let dir = tempfile::tempdir().unwrap();
 
@@ -243,9 +246,9 @@ fn a_second_open_is_not_refused_so_directory_derivation_is_the_guard() {
         },
     );
 
-    // The storage layer permits this. Recorded as fact, not asserted as a
-    // safety property, and immediately shut down so the rest of the test
-    // is not racing a second writer.
+    // The storage layer permits this on wasip1. Recorded as fact, not
+    // asserted as a safety property, and immediately shut down so the rest
+    // of the test is not racing a second writer.
     if let Ok(second) = Fiber::spawn(&image, "cell-e-double", dir.path()) {
         let _ = second.shutdown();
     }

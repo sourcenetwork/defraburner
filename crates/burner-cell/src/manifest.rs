@@ -49,6 +49,20 @@ pub struct AutoscalerSpec {
     pub tick_interval_secs: Option<u64>,
     #[serde(default)]
     pub paused: bool,
+    /// Whether the autoscaler may remove cells (D41).
+    ///
+    /// Defaults to `false`: the cluster grows on demand and never shrinks
+    /// on its own. Draining a cell destroys the wasm database it owns
+    /// (D40), so an automatic scale-down is a data-destroying action taken
+    /// without an operator in the loop. For this proof of concept that
+    /// trade is not worth making, and removal stays an explicit
+    /// `DELETE /admin/cells/{id}`.
+    ///
+    /// `#[serde(default)]` on a `bool` yields `false`, so a manifest
+    /// written before this field existed also loads with scale-down off,
+    /// which is the safe direction for a default to drift.
+    #[serde(default)]
+    pub scale_down_enabled: bool,
 }
 
 impl Default for ClusterManifest {
@@ -433,6 +447,7 @@ mod tests {
     #[test]
     fn autoscaler_spec_round_trips_through_json() {
         let spec = AutoscalerSpec {
+            scale_down_enabled: false,
             min_cells: Some(2),
             max_cells: Some(6),
             cooldown_secs: Some(90),
@@ -463,7 +478,11 @@ mod tests {
     #[test]
     fn autoscaler_spec_omits_absent_fields_from_json() {
         let json = serde_json::to_string(&AutoscalerSpec::default()).unwrap();
-        assert_eq!(json, r#"{"paused":false}"#);
+        // Option fields are omitted when absent; the bools are always
+        // written, so an operator reading the manifest sees the safety
+        // posture (D41: scale-down off) stated rather than implied by
+        // absence.
+        assert_eq!(json, r#"{"paused":false,"scale_down_enabled":false}"#);
     }
 
     fn backend_strategy() -> impl Strategy<Value = BackendKind> {
@@ -481,10 +500,19 @@ mod tests {
             proptest::option::of(any::<u64>()),
             proptest::option::of(any::<u64>()),
             any::<bool>(),
+            any::<bool>(),
         )
             .prop_map(
-                |(min_cells, max_cells, cooldown_secs, tick_interval_secs, paused)| {
+                |(
+                    min_cells,
+                    max_cells,
+                    cooldown_secs,
+                    tick_interval_secs,
+                    paused,
+                    scale_down_enabled,
+                )| {
                     AutoscalerSpec {
+                        scale_down_enabled,
                         min_cells,
                         max_cells,
                         cooldown_secs,

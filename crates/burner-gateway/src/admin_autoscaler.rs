@@ -27,10 +27,11 @@ struct AutoscalerConfigResponse {
     cooldown_secs: u64,
     tick_interval_secs: u64,
     paused: bool,
+    scale_down_enabled: bool,
 }
 
 /// `PUT /admin/autoscaler {min_cells?, max_cells?, cooldown_secs?,
-/// tick_interval_secs?, paused?}`: merges the given fields into the live
+/// tick_interval_secs?, paused?, scale_down_enabled?}`: merges the given fields into the live
 /// autoscaler override layer (persisted in the manifest), rejecting a
 /// patch whose resulting config would be nonsensical (400).
 async fn admin_set_autoscaler(
@@ -61,6 +62,7 @@ async fn admin_set_autoscaler(
                 cooldown_secs: effective.cooldown_secs,
                 tick_interval_secs: effective.tick_interval.as_secs(),
                 paused: state.autoscaler_control.is_paused().await,
+                scale_down_enabled: effective.scale_down_enabled,
             })
             .into_response()
         }

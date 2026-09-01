@@ -27,6 +27,11 @@
     const toggle = B.$("#autoscaler-pause-toggle");
     toggle.classList.toggle("on", !!control.paused);
     toggle.setAttribute("aria-checked", String(!!control.paused));
+    const scaleDown = B.$("#autoscaler-scaledown-toggle");
+    if (scaleDown) {
+      scaleDown.classList.toggle("on", !!control.scale_down_enabled);
+      scaleDown.setAttribute("aria-checked", String(!!control.scale_down_enabled));
+    }
   }
 
   function renderRuntime(runtime) {
@@ -153,6 +158,39 @@
         }
       })();
     });
+
+    // Scale-down is off by default: draining a cell destroys the wasm
+    // database it owns, so removal is an operator action, not something a
+    // policy tick does unattended. This toggle is how that is turned on.
+    const scaleDownToggle = B.$("#autoscaler-scaledown-toggle");
+    if (scaleDownToggle) {
+      scaleDownToggle.addEventListener("click", () => {
+        const result = B.$("#autoscaler-scaledown-result");
+        const next = !scaleDownToggle.classList.contains("on");
+        controlsDirty = true;
+        scaleDownToggle.setAttribute("aria-busy", "true");
+        (async () => {
+          try {
+            const response = await B.adminFetch("/admin/autoscaler", {
+              method: "PUT",
+              body: JSON.stringify({ scale_down_enabled: next }),
+            });
+            if (response.ok) {
+              scaleDownToggle.classList.toggle("on", next);
+              scaleDownToggle.setAttribute("aria-checked", String(next));
+              B.showResult(result, true, next ? "cells may be removed" : "");
+            } else {
+              B.showResult(result, false, await B.describeFailure(response));
+            }
+          } catch (err) {
+            B.showResult(result, false, "request failed: " + err.message);
+          } finally {
+            scaleDownToggle.removeAttribute("aria-busy");
+            controlsDirty = false;
+          }
+        })();
+      });
+    }
 
     B.$("#autoscaler-force-tick").addEventListener("click", () => {
       const btn = B.$("#autoscaler-force-tick");

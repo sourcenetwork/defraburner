@@ -562,6 +562,7 @@ struct AutoscalerControlView {
     cooldown_secs: u64,
     tick_interval_secs: u64,
     paused: bool,
+    scale_down_enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -650,6 +651,7 @@ async fn gather_overview(state: &GatewayState) -> Result<AdminStatusResponse> {
         cooldown_secs: effective.cooldown_secs,
         tick_interval_secs: effective.tick_interval.as_secs(),
         paused: state.autoscaler_control.is_paused().await,
+        scale_down_enabled: effective.scale_down_enabled,
     };
 
     Ok(AdminStatusResponse {
@@ -913,6 +915,7 @@ pub(crate) mod test_support {
         let (command_tx, command_rx) = mpsc::channel(burner_cell::COMMAND_CHANNEL_CAPACITY);
         let control = AutoscalerControl::new(
             burner_policy::autoscaler::AutoscalerConfig {
+                scale_down_enabled: false,
                 min_cells: 1,
                 max_cells: 8,
                 cooldown_secs: 60,

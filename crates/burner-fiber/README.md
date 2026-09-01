@@ -47,9 +47,13 @@ pass.
 
 ## A measured caveat
 
-regolith does **not** lock its data directory: a second fiber opened on a
-live directory succeeds. Single-writer safety is therefore structural,
-not enforced by the store - one fiber per cell, a directory derived from
-the cell id, and a cluster manifest that already refuses a duplicate id.
-Two tests in `tests/fiber_lifecycle.rs` pin this, and neither claims a
-guarantee this stack does not provide.
+regolith's directory lock is native-only. A native cell's store carries a
+`LOCK` file; the same store opened from the wasm guest does not, because
+WASI preview1 has no `flock`. On this target a second fiber opened on a
+live directory therefore succeeds.
+
+Single-writer safety for fibers is consequently structural, not enforced
+by the store - one fiber per cell, a directory derived from the cell id,
+and a cluster manifest that already refuses a duplicate id. Two tests in
+`tests/fiber_lifecycle.rs` pin this, and neither claims a guarantee this
+stack does not provide on this target.
