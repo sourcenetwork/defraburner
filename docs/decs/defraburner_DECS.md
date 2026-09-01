@@ -4,6 +4,64 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D43 (2026-09-01): the red mesh detector was leaked test processes
+
+`cross_process_mesh_dials_static_peers`, kept red since August as the D20
+second-listener regression detector, now passes on three consecutive runs
+and inside the full suite (251/251).
+
+- What the failures actually showed: B's `connected_peers` never contained
+  A's *second* cell. The ports named in two separate failure messages
+  (`20270`, `32761`) were being held at that moment by leaked
+  `defraburner` processes from earlier runs of the same test, which picks
+  a random base port per run. The new B was connecting to a stale A from
+  a previous run rather than to its own.
+- So at least some of this project's "known upstream defect" evidence was
+  self-inflicted. That does not retroactively disprove D20, whose original
+  repro (docs/upstream/) stands on its own, but it does mean the detector
+  was not measuring what it claimed on those runs.
+- Recorded rather than resolved, deliberately: whether upstream's 274
+  commits fixed the listener lifetime has NOT been confirmed on a clean
+  host, and claiming a fix on the strength of three passes next to nine
+  leftover processes would be exactly the false green this project's
+  honesty fence exists to prevent. The README now states the ambiguity
+  instead of either old claim.
+- Operational lesson, worth more than the test result: leaked test
+  processes are not untidy, they corrupt results. Two were also bound to
+  9171-9179 against the operator's real data root, which is what produced
+  the "Unexpected peer ID at /ip4/127.0.0.1/tcp/9172" in a live run.
+- Affects: README's suite-count and detector paragraph.
+- Reversible: n/a; this is a finding, not a change in behaviour.
+
+## D42 (2026-09-01): a pre-fold data root fails loud instead of coming up empty
+
+Found by running against the operator's real data root: 12 cells each held
+a `data.lark` from before upstream's backend fold, and every one of them
+started anyway with an empty regolith store created beside it. Three
+tenants degraded with "collection 'Lazer' not found", which reads as data
+loss but was actually an unmigrated data root plus a silent failure.
+
+- Options: (a) migrate lark data to regolith on open; (b) refuse to ignite
+  a cell whose directory holds a retired backend's store; (c) leave it and
+  document the upgrade step.
+- Chosen: (b).
+- Why: (a) is not possible with any code that exists. Upstream deleted the
+  lark and redb backends outright, so nothing in the current tree can read
+  `data.lark`; a migrator would have to be built against a pre-fold
+  checkout of defradb.rs, which is a project of its own and not something
+  to fake. (c) is what was already happening, and it is precisely the
+  false-green the honesty fence forbids: the cluster reported healthy
+  cells while serving none of the data.
+- The guard never touches the legacy directory. The data is still there,
+  and the error exists to give an operator the chance to archive or
+  migrate it before anything overwrites it.
+- The error names the cell, the path, why regolith cannot read it, and
+  both fixes (archive the directory, or `just reset-data`). Three tests
+  cover it, including that a live regolith store's own files do not trip
+  it.
+- Affects: burner-cell `cell::open_store`.
+- Reversible: yes, but removing it would restore a silent-data-loss path.
+
 ## D41 (2026-09-01): the autoscaler grows but does not shrink
 
 Operator direction: "autoscaler must not scale down ok? for this poc let
@@ -167,12 +225,21 @@ not resolve against upstream main at all until this was ported.
   collapse, with `lark`/`redb` kept as deserialization aliases.
 - Chosen: (c).
 - Why: (a) keeps names for engines that no longer exist, which is a lie in
-  the manifest and on the dashboard. (b) strands an existing data root: a
-  manifest written before the fold names `lark`, and refusing to load it
-  would take a populated cluster offline for a rename, when regolith can
-  in fact open that directory. (c) loads the old name, writes the new one,
-  so a manifest migrates itself on first save. Aliases are read-only and
-  covered by two tests.
+  the manifest and on the dashboard. (b) fails a manifest that is merely
+  named for a retired engine, when the rename itself is trivially
+  recoverable. (c) loads the old name, writes the new one, so a manifest
+  migrates itself on first save. Aliases are read-only and covered by two
+  tests.
+- CORRECTION (2026-09-01, found by running against a real pre-fold data
+  root): the original text here claimed regolith "can in fact open that
+  directory". That was wrong, and the mistake mattered. The alias makes
+  the *manifest* load, but the *data* is written in lark's format, which
+  no current code can read: regolith finds nothing of its own and creates
+  an empty store beside the untouched `data.lark`, so the cell comes up
+  with zero collections and every tenant on it degrades with "collection
+  not found". The alias is still correct for what it does; it just never
+  migrated data and must not be read as if it did. D42 makes that state
+  fail loud instead of silent.
 - The D11 memory-budget derivation is preserved exactly: regolith exposes
   the same `block_cache_size` and `write_buffer_size` knobs lark did, so a
   cell's budget still lands in the same proportions. The redb-only

@@ -220,8 +220,17 @@ inbound dial from another process or host to cell 2 and beyond is not.
 Cross-host meshes should dial out from later-ignited cells toward earlier
 ones until this is fixed upstream. Full repro and detail:
 [`docs/upstream/defradb-rs-second-listener-dies.md`](docs/upstream/defradb-rs-second-listener-dies.md).
-It is why the test suite sits at 243/244: the one red test is kept
-deliberately, as the regression detector for the fix.
+As of 2026-09-01 the suite is 251/251 green, including that detector.
+That is a change from the 223/224 this README carried through August, and
+the reason is not yet fully established, so it is stated rather than
+claimed: the detector failed repeatedly earlier the same day and now
+passes on three consecutive runs. Every observed failure named ports that
+leaked `defraburner` processes from *previous runs of the same test* were
+still holding, so the new process connected to a stale peer instead of
+its intended one. Whether upstream's second-listener defect is also fixed
+by the 274 commits pulled in with the regolith upgrade has not been
+confirmed on a clean host; treat the detector as informative, not as
+proof the upstream bug is gone.
 
 Named deferred work - WASM-hosted cells, document-hash sharding,
 per-cell process isolation, automated live tenant migration, cross-host

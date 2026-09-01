@@ -267,6 +267,41 @@ fn clamp_to_usize(bytes: u64) -> usize {
     usize::try_from(bytes).unwrap_or(usize::MAX)
 }
 
+/// Store directories written by backends upstream has since deleted.
+///
+/// Upstream folded every backend into regolith (D36). Regolith cannot read
+/// what lark or redb wrote, and, worse, it does not notice: opening a cell
+/// directory that holds `data.lark` simply creates an empty regolith store
+/// beside it. The cell then comes up with zero collections and every
+/// tenant on it degrades with "collection not found", which reads as data
+/// loss rather than as the unmigrated data root it actually is.
+const LEGACY_STORE_DIRS: &[&str] = &["data.lark", "data.redb"];
+
+/// Refuses to open a cell whose directory still holds a pre-fold store.
+///
+/// Fails loud with the fix rather than silently starting empty (D42). The
+/// legacy directory is never touched: the data is still there, and this
+/// error is what gives an operator the chance to migrate or archive it
+/// before anything overwrites it.
+fn reject_legacy_store(dir: &Path, cell_id: &str) -> Result<()> {
+    for legacy in LEGACY_STORE_DIRS {
+        let path = dir.join(legacy);
+        if path.exists() {
+            anyhow::bail!(
+                "cell '{cell_id}' holds a pre-fold store at {}. Upstream replaced every \
+                 storage backend with regolith, which cannot read it, and starting anyway \
+                 would bring the cell up empty and degrade every tenant on it with \
+                 'collection not found'.\n\
+                 The old data is untouched. Either archive or remove {} to start this cell \
+                 fresh, or run `just reset-data` to clear the whole data root.",
+                path.display(),
+                path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
 async fn open_store(spec: &CellSpec, dir: &Path) -> Result<embedded::EmbeddedStore> {
     match spec.backend {
         // D11: cache/buffer sizes are genuinely derived from
@@ -274,6 +309,7 @@ async fn open_store(spec: &CellSpec, dir: &Path) -> Result<embedded::EmbeddedSto
         // every other option (compaction, bloom filter, durability, ...)
         // stays default, per D11's ledger-phase scope of "cache sizing only".
         BackendKind::Regolith => {
+            reject_legacy_store(dir, &spec.id)?;
             let dir = dir.to_path_buf();
             let block_cache_size =
                 clamp_to_usize(regolith_block_cache_bytes(spec.mem_budget_bytes));
@@ -368,6 +404,43 @@ mod tests {
             Ok(_) => panic!("expected ignite to reject a non-IPv4 bind_addr"),
             Err(error) => assert!(error.to_string().contains("non-IPv4 bind_addr")),
         }
+    }
+
+    #[test]
+    fn a_pre_fold_store_is_refused_with_the_fix_named() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("data.lark")).unwrap();
+
+        let error = reject_legacy_store(dir.path(), "cell-4").unwrap_err();
+        let rendered = format!("{error:#}");
+        assert!(rendered.contains("cell-4"), "{rendered}");
+        assert!(rendered.contains("data.lark"), "{rendered}");
+        assert!(
+            rendered.contains("cannot read it"),
+            "the error must say why, not just that it refused: {rendered}"
+        );
+        assert!(
+            rendered.contains("reset-data") || rendered.contains("archive"),
+            "the error must name the fix: {rendered}"
+        );
+    }
+
+    #[test]
+    fn a_retired_redb_store_is_refused_too() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("data.redb")).unwrap();
+        assert!(reject_legacy_store(dir.path(), "cell-0").is_err());
+    }
+
+    #[test]
+    fn a_clean_or_regolith_directory_is_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(reject_legacy_store(dir.path(), "cell-0").is_ok());
+        // A live regolith store's own files must not trip the guard.
+        std::fs::create_dir(dir.path().join("sst")).unwrap();
+        std::fs::create_dir(dir.path().join("wal")).unwrap();
+        std::fs::write(dir.path().join("MANIFEST"), b"{}").unwrap();
+        assert!(reject_legacy_store(dir.path(), "cell-0").is_ok());
     }
 
     // --- D11: memory-budget-derived storage options ------------------------
