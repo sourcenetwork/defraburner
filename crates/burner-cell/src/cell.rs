@@ -292,9 +292,14 @@ fn reject_legacy_store(dir: &Path, cell_id: &str) -> Result<()> {
                  storage backend with regolith, which cannot read it, and starting anyway \
                  would bring the cell up empty and degrade every tenant on it with \
                  'collection not found'.\n\
-                 The old data is untouched. Either archive or remove {} to start this cell \
-                 fresh, or run `just reset-data` to clear the whole data root.",
-                path.display(),
+                 \n\
+                 The old data is untouched. To move every pre-fold store aside and start \
+                 fresh, keeping the old data on disk:\n\
+                 \n\
+                     just archive-legacy-stores\n\
+                     just start\n\
+                 \n\
+                 To discard the whole data root instead: `just reset-data`.",
                 path.display()
             );
         }

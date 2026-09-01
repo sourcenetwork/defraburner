@@ -181,6 +181,53 @@ up *ARGS:
 # it prints what it is about to remove first. Pass a path to wipe a
 # different data root, e.g. `just reset-data /tmp/demo`.
 
+# Move pre-fold stores aside so a data root written before upstream's
+# backend fold can boot again (D42).
+#
+# Upstream replaced every storage backend with regolith, which cannot read
+# what lark or redb wrote. A cell holding one of those refuses to ignite
+# rather than starting empty, so this is the way through that keeps the old
+# data: each `data.lark` / `data.redb` is MOVED, never deleted, under
+# `<root>/legacy-stores/<cell>/`. The cells then start fresh and empty.
+#
+# The old data stays unreadable by this build; archiving it preserves the
+# option of migrating it later with a pre-fold checkout of defradb.rs.
+
+# Move pre-fold (lark/redb) stores aside so the cluster can boot.
+archive-legacy-stores *ROOT:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="{{ROOT}}"
+    if [ -z "$root" ]; then
+        root="${DEFRABURNER_DATA:-$HOME/.local/share/defraburner}"
+    fi
+    if [ ! -d "$root/cells" ]; then
+        echo "nothing to archive: $root/cells does not exist"
+        exit 0
+    fi
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    dest="$root/legacy-stores/$stamp"
+    moved=0
+    for cell_dir in "$root"/cells/*/; do
+        cell="$(basename "$cell_dir")"
+        for legacy in data.lark data.redb; do
+            if [ -d "$cell_dir/$legacy" ]; then
+                mkdir -p "$dest/$cell"
+                mv "$cell_dir/$legacy" "$dest/$cell/$legacy"
+                echo "archived $cell/$legacy"
+                moved=$((moved + 1))
+            fi
+        done
+    done
+    if [ "$moved" -eq 0 ]; then
+        echo "no pre-fold stores found under $root; nothing to do"
+    else
+        echo
+        echo "moved $moved store(s) to $dest"
+        echo "they are NOT deleted, and this build cannot read them."
+        echo "the cells will now start fresh and empty; run 'just start'."
+    fi
+
 # Delete a data root (default: the one `just start` uses).
 reset-data *ROOT:
     #!/usr/bin/env bash
