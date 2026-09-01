@@ -4,6 +4,39 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D44 (2026-09-01): a placed tenant re-applies its schema instead of staying degraded
+
+Found by booting the operator's real data root after archiving its
+pre-fold stores (D42): all three tenants came up `placed / degraded` with
+"collection 'Lazer' not found - add schema before subscribing to P2P", and
+every restart reproduced it. There was no operator action that could
+recover them short of recreating the tenant.
+
+- Cause: `reconcile_placed` loaded the tenant's stored SDL only to read
+  its collection *names*, then went straight to wiring. It assumed a
+  placed tenant's cells already carry its collections. That assumption is
+  true in the normal case and unrecoverable when it is false.
+- Options: (a) assume and fail, as before; (b) re-apply the tenant's
+  stored SDL on any cell missing its collections; (c) tear the tenant down
+  and re-place it.
+- Chosen: (b).
+- Why: the SDL is already loaded, already parsed, and is by definition the
+  schema this tenant was created with, so re-applying it is restoring the
+  intended state, not inventing one. The guard is the existing
+  `schema_already_registered`, so a healthy cell costs one local lookup
+  and nothing else. (c) would move a tenant's data-bearing placement over
+  a recoverable condition, which is far more destructive than the problem.
+- This is not specific to the pre-fold migration. Any cell whose store
+  comes back without the tenant's collections hits it: a restored backup,
+  a hand-cleared directory, a cell re-provisioned under a reused id.
+- Verified on the operator's real data root (a copy): 3 tenants degraded
+  before, 8 cells re-schema'd on the next start, 0 degraded after, and a
+  previously-dead tenant then wrote and read documents through its own
+  data plane.
+- Affects: burner-mesh `reconcile::reconcile_placed`.
+- Reversible: yes, but reverting restores a permanently-degraded state
+  with no operator recovery path.
+
 ## D43 (2026-09-01): the red mesh detector was leaked test processes
 
 `cross_process_mesh_dials_static_peers`, kept red since August as the D20
