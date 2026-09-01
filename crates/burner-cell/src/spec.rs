@@ -19,9 +19,10 @@ pub struct CellSpec {
     pub bind_addr: IpAddr,
     /// Memory budget for this cell, in bytes. Genuinely drives storage cache
     /// sizing as of Phase 6 (D11): `cell::open_store` derives the backend's
-    /// own cache/buffer knobs from this value (`cell::lark_block_cache_bytes`
-    /// / `cell::lark_write_buffer_bytes` for Lark, `cell::redb_cache_bytes`
-    /// for Redb; `Memory` has no cache to size). It is still not a hard
+    /// own cache/buffer knobs from this value
+    /// (`cell::regolith_block_cache_bytes` /
+    /// `cell::regolith_write_buffer_bytes`; an in-memory cell has no
+    /// on-disk cache to size). It is still not a hard
     /// admission cap: a cell whose live working set exceeds its backend
     /// cache is not throttled or rejected, since request-level admission and
     /// full `MemoryLedger` accounting are a separate, later mechanism this
@@ -38,12 +39,20 @@ pub struct CellSpec {
 
 /// Storage backend selection for a cell, threaded through to upstream's
 /// public `embedded::EmbeddedStore` enum (D8).
+///
+/// Upstream folded every backend into regolith (defradb.rs `0c8597b4`), so
+/// the on-disk variants collapsed from `lark`/`redb` to the single
+/// `regolith`. The two retired names stay as deserialization aliases (D36):
+/// a cluster manifest written before the fold names a backend that no
+/// longer exists, and refusing to load it would strand a populated data
+/// root that regolith can in fact open. They are aliases only, never
+/// serialized back, so a manifest re-save migrates itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BackendKind {
     #[default]
-    Lark,
-    Redb,
+    #[serde(alias = "lark", alias = "redb")]
+    Regolith,
     /// Dev-only. Not safe to persist across restarts inside a cluster
     /// manifest: rejected at manifest load/save time
     /// (`manifest::ClusterManifest::validate`).
@@ -144,12 +153,8 @@ mod tests {
     #[test]
     fn backend_kind_serializes_lowercase() {
         assert_eq!(
-            serde_json::to_string(&BackendKind::Lark).unwrap(),
-            "\"lark\""
-        );
-        assert_eq!(
-            serde_json::to_string(&BackendKind::Redb).unwrap(),
-            "\"redb\""
+            serde_json::to_string(&BackendKind::Regolith).unwrap(),
+            "\"regolith\""
         );
         assert_eq!(
             serde_json::to_string(&BackendKind::Memory).unwrap(),
@@ -158,8 +163,32 @@ mod tests {
     }
 
     #[test]
-    fn backend_kind_default_is_lark() {
-        assert_eq!(BackendKind::default(), BackendKind::Lark);
+    fn backend_kind_default_is_regolith() {
+        assert_eq!(BackendKind::default(), BackendKind::Regolith);
+    }
+
+    /// D36: a manifest written before upstream's backend fold names `lark`
+    /// or `redb`. Both must still load, onto the one backend that exists,
+    /// so an existing data root is not stranded by the upgrade.
+    #[test]
+    fn retired_backend_names_still_deserialize() {
+        assert_eq!(
+            serde_json::from_str::<BackendKind>("\"lark\"").unwrap(),
+            BackendKind::Regolith
+        );
+        assert_eq!(
+            serde_json::from_str::<BackendKind>("\"redb\"").unwrap(),
+            BackendKind::Regolith
+        );
+    }
+
+    /// The aliases are read-only: a loaded manifest re-serializes under the
+    /// current name, so a save migrates the file rather than preserving a
+    /// backend that upstream deleted.
+    #[test]
+    fn retired_backend_names_are_not_written_back() {
+        let loaded: BackendKind = serde_json::from_str("\"lark\"").unwrap();
+        assert_eq!(serde_json::to_string(&loaded).unwrap(), "\"regolith\"");
     }
 
     #[test]
@@ -269,7 +298,7 @@ mod tests {
         let spec = CellSpec {
             id: "cell-0".to_string(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: 9171,
             bind_addr: "127.0.0.1".parse().unwrap(),
             mem_budget_bytes: DEFAULT_MEM_BUDGET_BYTES,

@@ -383,7 +383,7 @@ mod tests {
                 signing_key_file: burner_cell::identity::key_path(&data_root, "cell-0"),
                 id: "cell-0".to_string(),
                 group: "default".to_string(),
-                backend: burner_cell::BackendKind::Lark,
+                backend: burner_cell::BackendKind::Regolith,
                 p2p_port: free_tcp_port(),
                 bind_addr: "127.0.0.1".parse().unwrap(),
                 mem_budget_bytes: burner_cell::DEFAULT_MEM_BUDGET_BYTES,

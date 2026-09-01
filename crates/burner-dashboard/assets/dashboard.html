@@ -65,6 +65,10 @@
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="0"/><rect x="2" y="16" width="6" height="6" rx="0"/><rect x="9" y="2" width="6" height="6" rx="0"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
         Mesh
       </button>
+      <button type="button" class="nav-item" data-view="fibers">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        Databases
+      </button>
       <button type="button" class="nav-item" data-view="console">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
         Console
@@ -116,6 +120,52 @@
               <div id="overview-legend" class="chart-legend"></div>
             </div>
           </div>
+        </section>
+
+        <!-- ============ Fibers ============ -->
+        <section id="view-fibers" class="view">
+          <div class="ui-page-header">
+            <div>
+              <h1>Databases</h1>
+              <p class="ui-page-header-sub">Every cell owns one persistent wasm DefraDB: the whole engine compiled to wasm32-wasip1, loaded from the AOT-compiled package, persisting to the cell's own directory so it survives a restart. Cells are ignited and drained in the Cells view.</p>
+            </div>
+          </div>
+          <div id="fibers-banner"></div>
+
+          <div class="ui-grid-2" style="margin-top:12px">
+            <section class="ui-card">
+              <div class="ui-card-header"><h2>Cells</h2></div>
+              <div class="ui-card-body">
+                <div id="fibers-list"></div>
+              </div>
+            </section>
+
+            <section class="ui-card">
+              <div class="ui-card-header"><h2>Schema</h2></div>
+              <div class="ui-card-body">
+                <div class="ui-section-label">selected cell</div>
+                <div id="fibers-selected" class="mono" style="margin-bottom:8px">pick a cell above</div>
+                <textarea id="fibers-schema-sdl" class="ui-input mono" rows="4" placeholder="type Widget { name: String }" data-fiber-sdl></textarea>
+                <div class="row" style="gap:8px;margin-top:8px">
+                  <button type="button" id="fibers-schema-apply" class="ui-btn">apply schema</button>
+                  <span id="fibers-schema-result" class="ui-result" data-fiber-schema-result></span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="ui-card" style="margin-top:12px">
+            <div class="ui-card-header"><h2>Query</h2></div>
+            <div class="ui-card-body">
+              <textarea id="fibers-query-graphql" class="ui-input mono" rows="3" placeholder="{ Widget { name } }" data-fiber-graphql></textarea>
+              <div class="row" style="gap:10px;margin-top:8px;align-items:center">
+                <button type="button" id="fibers-query-run" class="ui-btn ui-btn-primary">run</button>
+                <label class="row" style="gap:6px;align-items:center"><input type="checkbox" id="fibers-query-mutate" /> mutation</label>
+                <span id="fibers-query-result" class="ui-result" data-fiber-query-result></span>
+              </div>
+              <pre id="fibers-query-output" class="ui-pre mono" style="margin-top:10px;max-height:320px;overflow:auto"></pre>
+            </div>
+          </section>
         </section>
 
         <!-- ============ Cells ============ -->
@@ -355,6 +405,7 @@
 <script src="/dashboard/assets/view-overview.js"></script>
 <script src="/dashboard/assets/mesh-panel.js"></script>
 <script src="/dashboard/assets/view-traffic-gen.js"></script>
+<script src="/dashboard/assets/view-fibers.js"></script>
 <script src="/dashboard/assets/view-cells.js"></script>
 <script src="/dashboard/assets/view-tenants.js"></script>
 <script src="/dashboard/assets/view-autoscaler.js"></script>

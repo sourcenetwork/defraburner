@@ -49,6 +49,7 @@ const MAIN_JS: &str = include_str!("../assets/main.js");
 const MESH_PANEL_JS: &str = include_str!("../assets/mesh-panel.js");
 const VIEW_OVERVIEW_JS: &str = include_str!("../assets/view-overview.js");
 const VIEW_CELLS_JS: &str = include_str!("../assets/view-cells.js");
+const VIEW_FIBERS_JS: &str = include_str!("../assets/view-fibers.js");
 const VIEW_TENANTS_JS: &str = include_str!("../assets/view-tenants.js");
 const VIEW_AUTOSCALER_JS: &str = include_str!("../assets/view-autoscaler.js");
 const VIEW_MESH_JS: &str = include_str!("../assets/view-mesh.js");
@@ -115,6 +116,7 @@ async fn asset(Path(path): Path<String>) -> Response {
             "mesh-panel.js" => (JS_TYPE, NO_CACHE, MESH_PANEL_JS.as_bytes()),
             "view-overview.js" => (JS_TYPE, NO_CACHE, VIEW_OVERVIEW_JS.as_bytes()),
             "view-cells.js" => (JS_TYPE, NO_CACHE, VIEW_CELLS_JS.as_bytes()),
+            "view-fibers.js" => (JS_TYPE, NO_CACHE, VIEW_FIBERS_JS.as_bytes()),
             "view-tenants.js" => (JS_TYPE, NO_CACHE, VIEW_TENANTS_JS.as_bytes()),
             "view-autoscaler.js" => (JS_TYPE, NO_CACHE, VIEW_AUTOSCALER_JS.as_bytes()),
             "view-mesh.js" => (JS_TYPE, NO_CACHE, VIEW_MESH_JS.as_bytes()),
@@ -187,6 +189,7 @@ mod tests {
             ("mesh-panel.js", JS_TYPE),
             ("view-overview.js", JS_TYPE),
             ("view-cells.js", JS_TYPE),
+            ("view-fibers.js", JS_TYPE),
             ("view-tenants.js", JS_TYPE),
             ("view-autoscaler.js", JS_TYPE),
             ("view-mesh.js", JS_TYPE),
@@ -294,6 +297,7 @@ mod tests {
             "mesh-panel.js",
             "view-overview.js",
             "view-cells.js",
+            "view-fibers.js",
             "view-tenants.js",
             "view-autoscaler.js",
             "view-mesh.js",

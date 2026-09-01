@@ -4,6 +4,147 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D40 (2026-09-01): fibers are cells
+
+Operator direction, verbatim: "fibers = cells". A fiber is not a separate
+resource with its own ids and lifecycle; every cell owns exactly one wasm
+DefraDB, sharing the cell's id and lifetime.
+
+- What changed from D39: `/admin/fibers` (a parallel registry with its own
+  ignite/drain and arbitrary names) is gone. A cell's database is
+  addressed at `/admin/cells/{id}/db`, and there is no ignite or drain
+  there because `/admin/cells` already owns that lifecycle.
+- The fiber is spawned inside `cell::ignite` and dropped with the cell, so
+  there is no reachable state where a cell has a stale fiber or a fiber
+  outlives its cell. `FiberPool` was deleted rather than left unused: the
+  supervisor's own cell map is the pool, and a second ownership model for
+  the same objects is exactly the divergence the doctrine forbids.
+- A cell's database lives at `<data_root>/cells/<id>/fiber/`, nested
+  inside the cell rather than beside it, so removing a cell's directory
+  removes its database and cannot orphan one.
+- Verified live: a spawned cell answers on its database immediately with
+  no separate step; a drained cell's database is gone with it; and the
+  autoscaler scaling an idle cell down took that cell's database with it
+  without any fiber-specific code in the autoscaler, which is the whole
+  point of the unification.
+- Measured while building this (honesty fence): regolith does **not** lock
+  its directory. A second fiber opened on a live directory succeeds. So
+  the single-writer guarantee is structural, not enforced by the store:
+  one fiber per cell, a directory derived from the cell id, and a manifest
+  that already refuses a duplicate id. Two tests pin this, and neither
+  claims a guarantee the stack does not provide.
+- Not done here, and gated on the mesh bridge: tenant traffic still routes
+  to the cell's native embedded node, because a wasm database cannot
+  replicate (no sockets in WASI preview1). Routing tenants at fibers
+  before Phase 5 would silently downgrade every multi-replica tenant to a
+  single-node database.
+- Affects: burner-cell (cell/supervisor), burner-fiber (pool deleted),
+  burner-gateway admin_fibers, the dashboard Databases view,
+  console_coverage.
+- Reversible: yes, but there is no reason to: the unified model is
+  strictly simpler than the parallel one it replaced.
+
+## D39 (2026-09-01, SUPERSEDED by D40): fibers as a parallel admin surface
+
+`/admin/fibers` ignites, drives, and drains wasm DefraDB fibers. Tenant
+traffic still routes to native cells.
+
+- Superseded the same day: the operator's direction was "fibers = cells".
+  Kept here as history, not as current truth; D40 is what stands.
+- Options: (a) replace the cell backend outright, routing tenants at
+  fibers; (b) add a parallel fiber surface and migrate later; (c) a
+  per-cell engine knob threaded through the supervisor now.
+- Chosen at the time: (b).
+- Why: (a) is the plan's Phase 6 and is gated on the mesh bridge, which
+  does not exist: a fiber cannot replicate, so making it the tenant
+  backend today would silently downgrade every multi-replica tenant to a
+  single-node database. (c) spends supervisor and manifest churn on a
+  seam whose second implementation cannot yet pass parity. (b) ships the
+  whole fiber capability, operable from the dashboard, without touching
+  the path that serves real tenant traffic.
+- Fibers live under `<data_root>/fibers/<id>`, never `cells/<id>`, so a
+  fiber and a native cell of the same name cannot collide on one
+  directory. A unit test pins that.
+- Igniting is explicit, never implicit on first query: starting a
+  database is an operator action with a real cost, and doing it as a side
+  effect would hide it. A query to a fiber that is not running is a 404
+  naming the fix.
+- Affects: burner-fiber (new crate), burner-gateway admin_fibers, the
+  dashboard Fibers view, console_coverage (4 new enforced rows).
+- Reversible: yes; the surface is additive and nothing else depends on it.
+
+## D38 (2026-09-01): the fiber protocol is duplicated, and a test enforces it
+
+The wire protocol exists twice, in `crates/burner-fiber/src/protocol.rs`
+and `packages/defradb/source/protocol.rs`.
+
+- Options: (a) one shared crate both sides depend on; (b) two copies with
+  a drift test; (c) two copies, reviewed by hand.
+- Chosen: (b).
+- Why: (a) is impossible in practice. The guest is a separate cargo tree
+  built for wasm32-wasip1 with `db` in a configuration that does not
+  compile for the host at all, so a shared crate would have to be
+  target-generic across a boundary whose whole point is that the two
+  sides differ. (c) is how two copies rot. (b) keeps them honest
+  mechanically: `contract.rs` parses the guest's own source and fails if
+  an operation is added, renamed, or removed on one side only, if the
+  frame ceilings diverge, or if the guest's `DATA_DIR` stops matching the
+  host's preopen path. The parser asserts it found operations at all, so
+  a broken parser cannot make the test vacuously pass.
+- This is the doctrine's "two places that must agree call one function"
+  rule honored at the only level a wasm boundary allows: they cannot call
+  one function, so a test proves they agree.
+- Affects: crates/burner-fiber/src/contract.rs.
+- Reversible: n/a; the duplication is structural.
+
+## D37 (2026-09-01): the defradb fiber package is its own cargo tree
+
+`packages/defradb` declares an empty `[workspace]` table, so it resolves
+independently of the defraburner workspace, and it carries a copy of
+defradb.rs's own `Cargo.lock`.
+
+- Options: (a) join the defraburner workspace; (b) standalone workspace,
+  fresh resolution; (c) standalone workspace pinned to upstream's lockfile.
+- Chosen: (c).
+- Why: (a) is impossible, the package targets wasm32-wasip1 with
+  `panic = "abort"` and a size-first profile, and its `db` dependency has
+  `native` off, a configuration that does not compile for the host at all.
+  (b) was tried and failed: a fresh resolution picked socket2 0.6.5, which
+  `db` reaches unconditionally through reqwest and which does not build for
+  wasip1. Upstream's lock pins 0.5.10/0.6.3, the resolution the Phase 0
+  probe validated, so inheriting it is both the fix and the reproducibility
+  guarantee.
+- Affects: packages/defradb/Cargo.toml, packages/defradb/Cargo.lock.
+- Reversible: yes; re-resolving is a lockfile delete away, and would need
+  the socket2 problem solved another way.
+
+## D36 (2026-09-01): upstream folded every storage backend into regolith
+
+defradb.rs `0c8597b4` deleted the lark and redb backends. defraburner did
+not resolve against upstream main at all until this was ported.
+
+- Options for `BackendKind`: (a) keep three variants and map two onto one
+  engine; (b) collapse to `Regolith`/`Memory`, no compatibility; (c)
+  collapse, with `lark`/`redb` kept as deserialization aliases.
+- Chosen: (c).
+- Why: (a) keeps names for engines that no longer exist, which is a lie in
+  the manifest and on the dashboard. (b) strands an existing data root: a
+  manifest written before the fold names `lark`, and refusing to load it
+  would take a populated cluster offline for a rename, when regolith can
+  in fact open that directory. (c) loads the old name, writes the new one,
+  so a manifest migrates itself on first save. Aliases are read-only and
+  covered by two tests.
+- The D11 memory-budget derivation is preserved exactly: regolith exposes
+  the same `block_cache_size` and `write_buffer_size` knobs lark did, so a
+  cell's budget still lands in the same proportions. The redb-only
+  `redb_cache_bytes` derivation and its test went with the backend.
+- An in-memory cell is now `RegolithStore::in_memory` rather than a
+  separate engine, so it gains real transaction diagnostics, which the
+  retired `Memory` backend never reported.
+- Affects: burner-cell spec/cell/manifest/supervisor, every call site
+  naming a backend, the attribution test's four RSS cases.
+- Reversible: no; the retired backends do not exist upstream.
+
 ## D35 (2026-08-21): add collections to a live tenant
 
 Operator, using the console: "there is no collection selection or

@@ -23,6 +23,25 @@ pub struct RunningCell {
     pub node: Arc<embedded::EmbeddedNode<embedded::EmbeddedStore>>,
     pub peer_id: String,
     pub listen_addrs: Vec<String>,
+    /// This cell's wasm DefraDB (D40). A cell and its fiber share an id
+    /// and a lifetime: the fiber is spawned here during ignition and shut
+    /// down when the cell is dropped, so there is no way to hold a cell
+    /// whose fiber is stale, or a fiber whose cell is gone.
+    ///
+    /// `None` only when the process has no fiber image, which happens when
+    /// `packages/defradb` has not been built. That is a legitimate state
+    /// (the `.afb` is a build output), so it degrades honestly rather than
+    /// refusing to ignite the cell at all.
+    pub fiber: Option<Arc<tokio::sync::Mutex<burner_fiber::Fiber>>>,
+}
+
+/// The on-disk directory a cell's wasm database lives in.
+///
+/// Nested inside the cell's own directory rather than beside it: a cell
+/// and its fiber are one unit, so removing a cell's directory removes its
+/// database with it and cannot leave an orphan.
+pub fn cell_fiber_dir(data_root: &Path, cell_id: &str) -> PathBuf {
+    cell_data_dir(data_root, cell_id).join("fiber")
 }
 
 impl RunningCell {
@@ -63,20 +82,21 @@ pub fn cell_collections(
 /// `storage::Store` impl does not forward `transaction_stats_handle` (it
 /// inherits the trait's `None` default), so this matches on the concrete
 /// backend variant instead and calls the real per-backend implementation
-/// directly (verified: `LarkStore`/`RedbStore` both implement it;
-/// `Memory` and `Encrypted` do not track it, so those honestly return
-/// `None` rather than a fabricated snapshot).
+/// directly (verified: `RegolithStore` implements it).
+///
+/// After upstream's backend fold (D36) an in-memory cell is a regolith
+/// store too, so it now reports real transaction diagnostics where the
+/// retired `Memory` backend had none. `Encrypted` wraps another store and
+/// does not forward the handle, so it still degrades to `None` rather than
+/// a fabricated snapshot; `_` also covers any future variant upstream's
+/// `non_exhaustive` enum adds.
 pub fn cell_transaction_stats(
     node: &embedded::EmbeddedNode<embedded::EmbeddedStore>,
 ) -> Option<serde_json::Value> {
     use storage::Store;
 
     let snapshot = match node.database.store().as_ref() {
-        embedded::EmbeddedStore::Lark(store) => store.transaction_stats_handle(),
-        embedded::EmbeddedStore::Redb(store) => store.transaction_stats_handle(),
-        // `Memory`/`Encrypted` do not track transaction diagnostics; `_`
-        // also covers any future variant a non_exhaustive enum adds
-        // upstream, matching the same honest "None" degrade.
+        embedded::EmbeddedStore::Regolith(store) => store.transaction_stats_handle(),
         _ => None,
     }?
     .snapshot();
@@ -100,7 +120,11 @@ pub fn cell_data_dir(data_root: &Path, cell_id: &str) -> PathBuf {
 /// embedded node with a fixed-port libp2p transport and its persisted
 /// signing identity, then waits for the libp2p listen address and resolves
 /// the peer id.
-pub async fn ignite(data_root: &Path, spec: CellSpec) -> Result<RunningCell> {
+pub async fn ignite(
+    data_root: &Path,
+    spec: CellSpec,
+    fiber_image: Option<&burner_fiber::FiberImage>,
+) -> Result<RunningCell> {
     // Phase 1 only builds IPv4 multiaddrs (the plan's spec fixes the
     // "/ip4/<bind_addr>/tcp/<port>" template); fail loud up front on an
     // IPv6 bind_addr rather than doing real I/O first and then only
@@ -134,7 +158,7 @@ pub async fn ignite(data_root: &Path, spec: CellSpec) -> Result<RunningCell> {
 
     let persistence = match spec.backend {
         BackendKind::Memory => embedded::Persistence::Memory,
-        BackendKind::Lark | BackendKind::Redb => embedded::Persistence::Persistent,
+        BackendKind::Regolith => embedded::Persistence::Persistent,
     };
 
     let listen_addr = format!("/ip4/{}/tcp/{}", spec.bind_addr, spec.p2p_port);
@@ -173,46 +197,67 @@ pub async fn ignite(data_root: &Path, spec: CellSpec) -> Result<RunningCell> {
         .map_err(|error| anyhow!(error))
         .with_context(|| format!("resolving peer id for cell '{}'", spec.id))?;
 
+    // The cell's wasm database, spawned last: everything above must be
+    // live before this cell claims to exist at all, and a fiber that fails
+    // to open its store is an ignition failure for the whole cell, not a
+    // quietly half-ignited one.
+    let fiber = match fiber_image {
+        None => None,
+        Some(image) => {
+            let dir = cell_fiber_dir(data_root, &spec.id);
+            let image = image.clone();
+            let cell_id = spec.id.clone();
+            let spawned = tokio::task::spawn_blocking(move || {
+                burner_fiber::Fiber::spawn(&image, &cell_id, &dir)
+            })
+            .await
+            .context("the fiber spawn task panicked")?
+            .with_context(|| format!("spawning the wasm database for cell '{}'", spec.id))?;
+            Some(Arc::new(tokio::sync::Mutex::new(spawned)))
+        }
+    };
+
     Ok(RunningCell {
         spec,
         node,
         peer_id,
         listen_addrs,
+        fiber,
     })
 }
 
-/// Floor for Lark's `block_cache_size` (D11): half the cell's memory budget,
-/// never below this, so a small budget still gets a workable cache.
-const LARK_MIN_BLOCK_CACHE_BYTES: u64 = 16 * 1024 * 1024;
-/// Floor for Lark's `write_buffer_size` (D11).
-const LARK_MIN_WRITE_BUFFER_BYTES: u64 = 8 * 1024 * 1024;
-/// Ceiling for Lark's `write_buffer_size` (D11): upstream's own default, so
-/// a generous budget does not balloon the memtable machinery
+/// Floor for regolith's `block_cache_size` (D11): half the cell's memory
+/// budget, never below this, so a small budget still gets a workable cache.
+const REGOLITH_MIN_BLOCK_CACHE_BYTES: u64 = 16 * 1024 * 1024;
+/// Floor for regolith's `write_buffer_size` (D11).
+const REGOLITH_MIN_WRITE_BUFFER_BYTES: u64 = 8 * 1024 * 1024;
+/// Ceiling for regolith's `write_buffer_size` (D11): upstream's own default,
+/// so a generous budget does not balloon the memtable machinery
 /// disproportionately to the cache.
-const LARK_MAX_WRITE_BUFFER_BYTES: u64 = 64 * 1024 * 1024;
+const REGOLITH_MAX_WRITE_BUFFER_BYTES: u64 = 64 * 1024 * 1024;
 
-/// Lark's `block_cache_size`, derived from a cell's memory budget (D11):
-/// half the budget, floored at 16 MiB (`LARK_MIN_BLOCK_CACHE_BYTES`). Pure
-/// arithmetic (no I/O), unit-tested directly below; `open_store` is the
-/// only caller that turns this into a real `LarkStoreOptions`.
-pub fn lark_block_cache_bytes(mem_budget_bytes: u64) -> u64 {
-    (mem_budget_bytes / 2).max(LARK_MIN_BLOCK_CACHE_BYTES)
+/// Regolith's `block_cache_size`, derived from a cell's memory budget (D11):
+/// half the budget, floored at 16 MiB (`REGOLITH_MIN_BLOCK_CACHE_BYTES`).
+/// Pure arithmetic (no I/O), unit-tested directly below; `open_store` is the
+/// only caller that turns this into a real `RegolithStoreOptions`.
+///
+/// The derivation is unchanged across upstream's backend fold (D36):
+/// regolith exposes the same two knobs lark did (`block_cache_size`,
+/// `write_buffer_size`), so a cell's budget still lands on the cache and
+/// the memtable in exactly the proportions D11 chose.
+pub fn regolith_block_cache_bytes(mem_budget_bytes: u64) -> u64 {
+    (mem_budget_bytes / 2).max(REGOLITH_MIN_BLOCK_CACHE_BYTES)
 }
 
-/// Lark's `write_buffer_size`, derived from a cell's memory budget (D11): an
-/// eighth of the budget, floored at 8 MiB (`LARK_MIN_WRITE_BUFFER_BYTES`)
-/// and capped at 64 MiB (`LARK_MAX_WRITE_BUFFER_BYTES`).
-pub fn lark_write_buffer_bytes(mem_budget_bytes: u64) -> u64 {
-    (mem_budget_bytes / 8).clamp(LARK_MIN_WRITE_BUFFER_BYTES, LARK_MAX_WRITE_BUFFER_BYTES)
-}
-
-/// Redb's `cache_size`, derived from a cell's memory budget (D11): half the
-/// budget, unfloored and uncapped (redb's own default, used when
-/// `cache_size` is left unset, is a flat 1 GiB; halving the configured
-/// budget is a genuine derivation at every budget size, not merely a
-/// reported value).
-pub fn redb_cache_bytes(mem_budget_bytes: u64) -> u64 {
-    mem_budget_bytes / 2
+/// Regolith's `write_buffer_size`, derived from a cell's memory budget
+/// (D11): an eighth of the budget, floored at 8 MiB
+/// (`REGOLITH_MIN_WRITE_BUFFER_BYTES`) and capped at 64 MiB
+/// (`REGOLITH_MAX_WRITE_BUFFER_BYTES`).
+pub fn regolith_write_buffer_bytes(mem_budget_bytes: u64) -> u64 {
+    (mem_budget_bytes / 8).clamp(
+        REGOLITH_MIN_WRITE_BUFFER_BYTES,
+        REGOLITH_MAX_WRITE_BUFFER_BYTES,
+    )
 }
 
 /// Clamps a derived byte count into `usize` (the backend option structs'
@@ -225,35 +270,34 @@ fn clamp_to_usize(bytes: u64) -> usize {
 async fn open_store(spec: &CellSpec, dir: &Path) -> Result<embedded::EmbeddedStore> {
     match spec.backend {
         // D11: cache/buffer sizes are genuinely derived from
-        // mem_budget_bytes, not left at LarkStoreOptions::default(); every
-        // other option (compaction, bloom filter, durability, ...) stays
-        // default, per D11's ledger-phase scope of "cache sizing only".
-        BackendKind::Lark => {
+        // mem_budget_bytes, not left at RegolithStoreOptions::default();
+        // every other option (compaction, bloom filter, durability, ...)
+        // stays default, per D11's ledger-phase scope of "cache sizing only".
+        BackendKind::Regolith => {
             let dir = dir.to_path_buf();
-            let block_cache_size = clamp_to_usize(lark_block_cache_bytes(spec.mem_budget_bytes));
-            let write_buffer_size = clamp_to_usize(lark_write_buffer_bytes(spec.mem_budget_bytes));
+            let block_cache_size =
+                clamp_to_usize(regolith_block_cache_bytes(spec.mem_budget_bytes));
+            let write_buffer_size =
+                clamp_to_usize(regolith_write_buffer_bytes(spec.mem_budget_bytes));
             let store = tokio::task::spawn_blocking(move || {
-                let options = storage::LarkStoreOptions::new()
-                    .with_block_cache_size(block_cache_size)
-                    .with_write_buffer_size(write_buffer_size);
-                storage::LarkStore::open_with_options(&dir, options)
+                let mut options = storage::RegolithStoreOptions::new();
+                options.engine.block_cache_size = block_cache_size;
+                options.engine.write_buffer_size = write_buffer_size;
+                storage::RegolithStore::open_with_options(&dir, options)
             })
             .await
-            .context("lark open task panicked")??;
-            Ok(embedded::EmbeddedStore::Lark(store))
+            .context("regolith open task panicked")??;
+            Ok(embedded::EmbeddedStore::Regolith(store))
         }
-        BackendKind::Redb => {
-            let dir = dir.to_path_buf();
-            let cache_size = clamp_to_usize(redb_cache_bytes(spec.mem_budget_bytes));
-            let store = tokio::task::spawn_blocking(move || {
-                let options = storage::RedbStoreOptions::new().with_cache_size(cache_size);
-                storage::RedbStore::open_with_options(&dir, options)
-            })
-            .await
-            .context("redb open task panicked")??;
-            Ok(embedded::EmbeddedStore::Redb(store))
+        // `in_memory` rather than a separate backend type: upstream's fold
+        // left regolith the only engine, and its memory preset starts no
+        // threads and skips fsync, which is what an ephemeral cell wants.
+        BackendKind::Memory => {
+            let store = tokio::task::spawn_blocking(storage::RegolithStore::in_memory)
+                .await
+                .context("regolith in-memory open task panicked")??;
+            Ok(embedded::EmbeddedStore::Regolith(store))
         }
-        BackendKind::Memory => Ok(embedded::EmbeddedStore::Memory(storage::MemoryStore::new())),
     }
 }
 
@@ -320,7 +364,7 @@ mod tests {
         // instead of the expected validation message. `RunningCell` (the
         // Ok side) isn't `Debug` (it holds a real `EmbeddedNode`), so this
         // matches instead of using `unwrap_err()`.
-        match ignite(Path::new("/nonexistent-data-root"), spec).await {
+        match ignite(Path::new("/nonexistent-data-root"), spec, None).await {
             Ok(_) => panic!("expected ignite to reject a non-IPv4 bind_addr"),
             Err(error) => assert!(error.to_string().contains("non-IPv4 bind_addr")),
         }
@@ -329,55 +373,53 @@ mod tests {
     // --- D11: memory-budget-derived storage options ------------------------
 
     #[test]
-    fn lark_block_cache_is_half_the_budget() {
+    fn regolith_block_cache_is_half_the_budget() {
         // Well above the floor, so half-the-budget is the effective value:
         // 512 MiB budget -> 256 MiB cache.
-        assert_eq!(lark_block_cache_bytes(512 * 1024 * 1024), 256 * 1024 * 1024);
+        assert_eq!(
+            regolith_block_cache_bytes(512 * 1024 * 1024),
+            256 * 1024 * 1024
+        );
     }
 
     #[test]
-    fn lark_block_cache_floors_at_16_mib_for_a_tiny_budget() {
+    fn regolith_block_cache_floors_at_16_mib_for_a_tiny_budget() {
         assert_eq!(
-            lark_block_cache_bytes(1024 * 1024),
-            LARK_MIN_BLOCK_CACHE_BYTES
+            regolith_block_cache_bytes(1024 * 1024),
+            REGOLITH_MIN_BLOCK_CACHE_BYTES
         );
         // Exactly at the floor boundary (32 MiB budget / 2 == 16 MiB):
         // still the floor value, not a fraction below it.
         assert_eq!(
-            lark_block_cache_bytes(2 * LARK_MIN_BLOCK_CACHE_BYTES),
-            LARK_MIN_BLOCK_CACHE_BYTES
+            regolith_block_cache_bytes(2 * REGOLITH_MIN_BLOCK_CACHE_BYTES),
+            REGOLITH_MIN_BLOCK_CACHE_BYTES
         );
     }
 
     #[test]
-    fn lark_write_buffer_is_an_eighth_of_the_budget_in_the_middle_range() {
+    fn regolith_write_buffer_is_an_eighth_of_the_budget_in_the_middle_range() {
         // 128 MiB budget / 8 == 16 MiB: above the 8 MiB floor, below the
         // 64 MiB ceiling.
-        assert_eq!(lark_write_buffer_bytes(128 * 1024 * 1024), 16 * 1024 * 1024);
-    }
-
-    #[test]
-    fn lark_write_buffer_floors_at_8_mib_for_a_tiny_budget() {
         assert_eq!(
-            lark_write_buffer_bytes(1024 * 1024),
-            LARK_MIN_WRITE_BUFFER_BYTES
+            regolith_write_buffer_bytes(128 * 1024 * 1024),
+            16 * 1024 * 1024
         );
     }
 
     #[test]
-    fn lark_write_buffer_ceils_at_64_mib_for_a_huge_budget() {
+    fn regolith_write_buffer_floors_at_8_mib_for_a_tiny_budget() {
         assert_eq!(
-            lark_write_buffer_bytes(crate::spec::DEFAULT_MEM_BUDGET_BYTES * 100),
-            LARK_MAX_WRITE_BUFFER_BYTES
+            regolith_write_buffer_bytes(1024 * 1024),
+            REGOLITH_MIN_WRITE_BUFFER_BYTES
         );
     }
 
     #[test]
-    fn redb_cache_is_half_the_budget_unfloored_and_uncapped() {
-        assert_eq!(redb_cache_bytes(512 * 1024 * 1024), 256 * 1024 * 1024);
-        // No floor: unlike Lark, a tiny budget halves straight through.
-        assert_eq!(redb_cache_bytes(1024), 512);
-        assert_eq!(redb_cache_bytes(0), 0);
+    fn regolith_write_buffer_ceils_at_64_mib_for_a_huge_budget() {
+        assert_eq!(
+            regolith_write_buffer_bytes(crate::spec::DEFAULT_MEM_BUDGET_BYTES * 100),
+            REGOLITH_MAX_WRITE_BUFFER_BYTES
+        );
     }
 
     #[test]

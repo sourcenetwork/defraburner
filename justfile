@@ -274,6 +274,13 @@ packages:
     for dir in packages/*/; do
         dir="${dir%/}"
         [ -f "$dir/afb.toml" ] || continue
+        # The defradb fiber is a Rust package building the whole DefraDB
+        # engine to wasm32-wasip1: a ~30 s build needing an extra rustup
+        # target, and nothing here embeds it (build.rs names only the two
+        # policy wasms). Keeping it out of this loop is what keeps `just
+        # start` a zero-flag front door on a fresh clone; build it with
+        # `just package-defradb`, which is what produces its .afb.
+        [ "$dir" = "packages/defradb" ] && continue
         echo "packages: compiling $dir"
         (cd "$dir" && burn compile .)
         afb_file=$(ls -t "$dir"/*.afb | head -n1)
@@ -283,6 +290,31 @@ packages:
         mv "$tmp/precompiled/wasm32-wasip1/main.wasm" "$dir/.build/main.wasm"
         rm -rf "$tmp"
     done
+
+# Build the persistent-DefraDB fiber package (docs/plans/defradb-wasm.md):
+# the whole engine compiled to one wasm32-wasip1 module and AOT-packed into
+# a .afb by the burn CLI. Separate from `packages` on purpose (see the note
+# in that recipe). The .afb is a build output, not source (.gitignore), so
+# this recipe is how it comes into being. Needs the wasm32-wasip1 target.
+# Build the defradb fiber package (.afb) and test it on the real target.
+package-defradb:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v burn >/dev/null 2>&1 || {
+        echo "package-defradb: 'burn' not found on PATH. run 'just setup' first." >&2
+        exit 1
+    }
+    rustup target list --installed | grep -qx wasm32-wasip1 || {
+        echo "package-defradb: the wasm32-wasip1 target is missing." >&2
+        echo "  fix: rustup target add wasm32-wasip1" >&2
+        exit 1
+    }
+    cd packages/defradb
+    # Tests run as wasm under wasmtime (see .cargo/config.toml): `db`
+    # without its `native` feature is a wasm-only configuration, so the
+    # real target is the only honest place to test it.
+    cargo test --release --target wasm32-wasip1
+    burn compile . -o defraburner-defradb-0.1.0.afb
 
 # Phase 6 perf harness ("measure or it did not happen"): builds the dist
 # binary, then runs loadgen against a 1-cell cluster and a 3-cell cluster,

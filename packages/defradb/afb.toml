@@ -1,0 +1,13 @@
+[format]
+version = "1.0"
+
+[package]
+entry = "source/main.rs"
+language = "rust"
+license = "Apache-2.0"
+name = "defradb"
+namespace = "defraburner"
+version = "0.1.0"
+
+[runtime]
+min = "0.2.7"

@@ -24,6 +24,7 @@
 
 mod admin_autoscaler;
 mod admin_cells;
+mod admin_fibers;
 mod admin_tenants;
 pub mod admission;
 pub mod auth;

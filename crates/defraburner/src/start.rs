@@ -88,9 +88,18 @@ pub async fn run(
         0
     };
 
+    // The wasm database image every cell's fiber instantiates from (D40).
+    // Loaded before any cell ignites, because a cell without it comes up
+    // with no database at all.
+    let (fiber_image, fiber_unavailable_reason) = load_fiber_runtime();
+    match fiber_unavailable_reason.as_deref() {
+        Some(reason) => tracing::warn!(reason, "cells will ignite without a wasm database"),
+        None => tracing::info!("wasm database image loaded; every cell gets one"),
+    }
+
     let supervisor = if existing_cells > 0 {
         tracing::info!(data_root = %data_root.display(), existing_cells, "cluster manifest found, recovering");
-        Supervisor::recover(&data_root)
+        Supervisor::recover_with_fiber_image(&data_root, fiber_image.clone())
             .await
             .context("recovering cluster")?
     } else {
@@ -99,7 +108,7 @@ pub async fn run(
             cells,
             "no existing cells recorded, provisioning fresh cells"
         );
-        provision_fresh(&data_root, cells, bind, base_port).await?
+        provision_fresh(&data_root, cells, bind, base_port, fiber_image.clone()).await?
     };
 
     for status in &supervisor.status() {
@@ -213,6 +222,7 @@ pub async fn run(
     // code, before the ready-file claims the cluster is up (see
     // `burner_gateway::gateway::build`'s doc comment for why this is
     // split from `serve`, which *is* spawned, below).
+
     let (gateway_listener, gateway_router, gateway_metrics, admin_token) =
         burner_gateway::gateway::build(
             gateway_addr,
@@ -224,6 +234,7 @@ pub async fn run(
             command_tx,
             runtime_info,
             static_peer_outcomes.clone(),
+            fiber_unavailable_reason,
         )
         .await
         .context("starting gateway")?;
@@ -340,8 +351,12 @@ async fn provision_fresh(
     cells: usize,
     bind: IpAddr,
     base_port: u16,
+    fiber_image: Option<burner_fiber::FiberImage>,
 ) -> Result<Supervisor> {
     let mut supervisor = Supervisor::new(data_root);
+    if let Some(image) = fiber_image {
+        supervisor = supervisor.with_fiber_image(image);
+    }
     for i in 0..cells {
         let id = format!("cell-{i}");
         let offset = u16::try_from(i)
@@ -354,7 +369,7 @@ async fn provision_fresh(
             signing_key_file: burner_cell::identity::key_path(data_root, &id),
             id: id.clone(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: port,
             bind_addr: bind,
             mem_budget_bytes: DEFAULT_MEM_BUDGET_BYTES,
@@ -460,4 +475,85 @@ fn spawn_browser(url: &str) {
     if let Err(error) = result {
         tracing::warn!(error = %error, url, "failed to spawn xdg-open for the dashboard URL");
     }
+}
+
+/// Name of the fiber package artifact `just package-defradb` produces.
+const FIBER_PACKAGE_FILE: &str = "defraburner-defradb-0.1.0.afb";
+
+/// Environment override for the fiber package's location.
+const FIBER_PACKAGE_ENV: &str = "DEFRABURNER_FIBER_PACKAGE";
+
+/// Finds and compiles the wasm database package every cell's fiber runs.
+///
+/// Returns `(image, reason_it_is_absent)`. Exactly one is `Some`.
+///
+/// Absent is a legitimate state, not a failure: the `.afb` is a build
+/// output (`.gitignore` excludes it), so a tree that has not run
+/// `just package-defradb` simply has no wasm databases, and `just start`
+/// must still come up. It is never silent, though: the reason travels
+/// into the gateway so `/admin/cells/{id}/db` and the dashboard say *why*
+/// rather than reporting a bare absence.
+///
+/// The package is not embedded with `include_bytes!` the way the policy
+/// wasms are, deliberately: at ~1.4 MiB it would make every build depend
+/// on a wasm toolchain and an extra rustup target, which would cost the
+/// zero-flag front door on a fresh clone.
+fn load_fiber_runtime() -> (Option<burner_fiber::FiberImage>, Option<String>) {
+    let mut searched = Vec::new();
+
+    // An explicit override wins, and a bad one is an error rather than a
+    // silent fall-through to a different package than the operator named.
+    if let Ok(explicit) = std::env::var(FIBER_PACKAGE_ENV) {
+        let path = std::path::PathBuf::from(&explicit);
+        return match burner_fiber::FiberImage::from_afb_path(&path) {
+            Ok(image) => (Some(image), None),
+            Err(error) => (
+                None,
+                Some(format!(
+                    "{FIBER_PACKAGE_ENV}={explicit} could not be loaded: {error:#}"
+                )),
+            ),
+        };
+    }
+
+    for candidate in fiber_package_candidates() {
+        if candidate.is_file() {
+            return match burner_fiber::FiberImage::from_afb_path(&candidate) {
+                Ok(image) => (Some(image), None),
+                Err(error) => (
+                    None,
+                    Some(format!(
+                        "found {} but could not load it: {error:#}",
+                        candidate.display()
+                    )),
+                ),
+            };
+        }
+        searched.push(candidate.display().to_string());
+    }
+
+    (
+        None,
+        Some(format!(
+            "the fiber package was not found (looked in: {}). \
+             Build it with `just package-defradb`, or point \
+             {FIBER_PACKAGE_ENV} at a .afb.",
+            searched.join(", ")
+        )),
+    )
+}
+
+/// Where to look for the fiber package, in order: the repo layout relative
+/// to the working directory (how `just start` runs), then beside the
+/// executable (how a deployed binary ships).
+fn fiber_package_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates =
+        vec![std::path::PathBuf::from("packages/defradb").join(FIBER_PACKAGE_FILE)];
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        candidates.push(dir.join(FIBER_PACKAGE_FILE));
+        candidates.push(dir.join("packages/defradb").join(FIBER_PACKAGE_FILE));
+    }
+    candidates
 }

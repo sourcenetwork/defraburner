@@ -1,0 +1,33 @@
+[package]
+name = "burner-fiber"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The wasm host. Already resolved in this workspace through afterburner, so
+# naming it directly adds no new build unit; it is named directly because
+# this crate drives Engine/Module/Store itself rather than reaching them
+# through afterburner's own sealed one-shot path, which cannot preopen a
+# directory or keep an instance alive (see the crate doc comment).
+wasmtime = "44"
+wasmtime-wasi = "44"
+
+# `.afb` extraction, same mechanism and same pins burner-policy already
+# uses to unpack a policy package: a `.afb` is a zstd-compressed tar.
+tar = { version = "0.4", default-features = false }
+zstd = { version = "0.13", default-features = false }
+
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+[dev-dependencies]
+tempfile = "3"
+# Test-only: the directory-derivation guard lives on burner-cell, and the
+# test that pins it belongs beside the fiber behaviour it protects. Not a
+# runtime dependency, so the one-directional cell -> fiber edge stands.
+burner-cell = { path = "../burner-cell" }

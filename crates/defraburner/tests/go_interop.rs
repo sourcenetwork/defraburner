@@ -61,7 +61,7 @@ async fn go_interop_pulls_a_document_via_explicit_sync() {
             signing_key_file: burner_cell::identity::key_path(&data_root, "cell-0"),
             id: "cell-0".to_string(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: port,
             bind_addr: "127.0.0.1".parse().unwrap(),
             mem_budget_bytes: DEFAULT_MEM_BUDGET_BYTES,

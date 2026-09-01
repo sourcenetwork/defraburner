@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/defraburner",
     "crates/burner-cell",
+    "crates/burner-fiber",
     "crates/burner-mesh",
     "crates/burner-gateway",
     "crates/burner-policy",

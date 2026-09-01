@@ -528,7 +528,7 @@ mod tests {
         CellSpec {
             id: id.to_string(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: 9171,
             bind_addr: "127.0.0.1".parse().unwrap(),
             mem_budget_bytes: burner_cell::DEFAULT_MEM_BUDGET_BYTES,
@@ -626,7 +626,7 @@ mod tests {
             .map(|i| CellStatus {
                 id: format!("cell-{i}"),
                 group: "default".to_string(),
-                backend: BackendKind::Lark,
+                backend: BackendKind::Regolith,
                 peer_id: format!("peer-{i}"),
                 listen_addrs: vec![format!("/ip4/127.0.0.1/tcp/{}", 9171 + i)],
                 marker_ok: true,

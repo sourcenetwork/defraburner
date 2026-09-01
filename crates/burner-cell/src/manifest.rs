@@ -223,7 +223,7 @@ mod tests {
         CellSpec {
             id: id.to_string(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: port,
             bind_addr: "127.0.0.1".parse().unwrap(),
             mem_budget_bytes: DEFAULT_MEM_BUDGET_BYTES,
@@ -467,7 +467,7 @@ mod tests {
     }
 
     fn backend_strategy() -> impl Strategy<Value = BackendKind> {
-        prop_oneof![Just(BackendKind::Lark), Just(BackendKind::Redb)]
+        Just(BackendKind::Regolith)
     }
 
     /// Arbitrary (console round, D23): every field independently present or
