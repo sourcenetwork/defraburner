@@ -181,6 +181,53 @@ up *ARGS:
 # it prints what it is about to remove first. Pass a path to wipe a
 # different data root, e.g. `just reset-data /tmp/demo`.
 
+# Move pre-fold stores aside so a data root written before upstream's
+# backend fold can boot again (D42).
+#
+# Upstream replaced every storage backend with regolith, which cannot read
+# what lark or redb wrote. A cell holding one of those refuses to ignite
+# rather than starting empty, so this is the way through that keeps the old
+# data: each `data.lark` / `data.redb` is MOVED, never deleted, under
+# `<root>/legacy-stores/<cell>/`. The cells then start fresh and empty.
+#
+# The old data stays unreadable by this build; archiving it preserves the
+# option of migrating it later with a pre-fold checkout of defradb.rs.
+
+# Move pre-fold (lark/redb) stores aside so the cluster can boot.
+archive-legacy-stores *ROOT:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="{{ROOT}}"
+    if [ -z "$root" ]; then
+        root="${DEFRABURNER_DATA:-$HOME/.local/share/defraburner}"
+    fi
+    if [ ! -d "$root/cells" ]; then
+        echo "nothing to archive: $root/cells does not exist"
+        exit 0
+    fi
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    dest="$root/legacy-stores/$stamp"
+    moved=0
+    for cell_dir in "$root"/cells/*/; do
+        cell="$(basename "$cell_dir")"
+        for legacy in data.lark data.redb; do
+            if [ -d "$cell_dir/$legacy" ]; then
+                mkdir -p "$dest/$cell"
+                mv "$cell_dir/$legacy" "$dest/$cell/$legacy"
+                echo "archived $cell/$legacy"
+                moved=$((moved + 1))
+            fi
+        done
+    done
+    if [ "$moved" -eq 0 ]; then
+        echo "no pre-fold stores found under $root; nothing to do"
+    else
+        echo
+        echo "moved $moved store(s) to $dest"
+        echo "they are NOT deleted, and this build cannot read them."
+        echo "the cells will now start fresh and empty; run 'just start'."
+    fi
+
 # Delete a data root (default: the one `just start` uses).
 reset-data *ROOT:
     #!/usr/bin/env bash
@@ -274,6 +321,13 @@ packages:
     for dir in packages/*/; do
         dir="${dir%/}"
         [ -f "$dir/afb.toml" ] || continue
+        # The defradb fiber is a Rust package building the whole DefraDB
+        # engine to wasm32-wasip1: a ~30 s build needing an extra rustup
+        # target, and nothing here embeds it (build.rs names only the two
+        # policy wasms). Keeping it out of this loop is what keeps `just
+        # start` a zero-flag front door on a fresh clone; build it with
+        # `just package-defradb`, which is what produces its .afb.
+        [ "$dir" = "packages/defradb" ] && continue
         echo "packages: compiling $dir"
         (cd "$dir" && burn compile .)
         afb_file=$(ls -t "$dir"/*.afb | head -n1)
@@ -283,6 +337,31 @@ packages:
         mv "$tmp/precompiled/wasm32-wasip1/main.wasm" "$dir/.build/main.wasm"
         rm -rf "$tmp"
     done
+
+# Build the persistent-DefraDB fiber package (docs/plans/defradb-wasm.md):
+# the whole engine compiled to one wasm32-wasip1 module and AOT-packed into
+# a .afb by the burn CLI. Separate from `packages` on purpose (see the note
+# in that recipe). The .afb is a build output, not source (.gitignore), so
+# this recipe is how it comes into being. Needs the wasm32-wasip1 target.
+# Build the defradb fiber package (.afb) and test it on the real target.
+package-defradb:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v burn >/dev/null 2>&1 || {
+        echo "package-defradb: 'burn' not found on PATH. run 'just setup' first." >&2
+        exit 1
+    }
+    rustup target list --installed | grep -qx wasm32-wasip1 || {
+        echo "package-defradb: the wasm32-wasip1 target is missing." >&2
+        echo "  fix: rustup target add wasm32-wasip1" >&2
+        exit 1
+    }
+    cd packages/defradb
+    # Tests run as wasm under wasmtime (see .cargo/config.toml): `db`
+    # without its `native` feature is a wasm-only configuration, so the
+    # real target is the only honest place to test it.
+    cargo test --release --target wasm32-wasip1
+    burn compile . -o defraburner-defradb-0.1.0.afb
 
 # Phase 6 perf harness ("measure or it did not happen"): builds the dist
 # binary, then runs loadgen against a 1-cell cluster and a 3-cell cluster,

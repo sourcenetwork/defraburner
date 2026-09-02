@@ -336,6 +336,7 @@ async fn set_autoscaler(
             cooldown_secs: previous.cooldown_secs,
             tick_interval_secs: previous.tick_interval_secs,
             paused: Some(previous.paused),
+            scale_down_enabled: Some(previous.scale_down_enabled),
         };
         // Best-effort: `revert` is built from a snapshot this same
         // control already validated once (`previous`), so re-applying it

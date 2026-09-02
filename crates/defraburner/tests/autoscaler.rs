@@ -145,6 +145,29 @@ fn autoscaler_scales_up_then_down_within_guardrails() {
         "scale-up should have grown the fleet, got {cell_count} cell(s)"
     );
 
+    // Removal is disabled by default (D41), because draining a cell now
+    // destroys the wasm database it owns. This test is specifically about
+    // the scale-down half of the guardrails, so it turns the knob on
+    // through the same admin route an operator would use, which also
+    // proves the knob actually reaches the clamp.
+    let enable = ureq::put(&format!("{base_url}/admin/autoscaler"))
+        .set("Authorization", &format!("Bearer {admin_token}"))
+        .send_json(serde_json::json!({ "scale_down_enabled": true }));
+    match enable {
+        Ok(response) => {
+            let body: serde_json::Value = response.into_json().expect("autoscaler response body");
+            assert_eq!(
+                body["scale_down_enabled"], true,
+                "enabling scale-down should be reflected in the response: {body:?}"
+            );
+        }
+        Err(error) => {
+            send_sigterm(&child);
+            wait_for_exit(&mut child, EXIT_DEADLINE);
+            panic!("enabling scale_down failed: {error}");
+        }
+    }
+
     // --- stop the load, then poll until the fleet scales back down to 1 ---
     stop.store(true, Ordering::Relaxed);
     for handle in load_handles {

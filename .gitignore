@@ -6,3 +6,6 @@
 # neither it nor the extracted wasm belongs in source control.
 packages/**/.build/
 packages/**/*.afb
+# The fiber package is its own cargo tree, so the root-only `/target` rule
+# above does not reach it.
+packages/**/target/

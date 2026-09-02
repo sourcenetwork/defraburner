@@ -235,6 +235,37 @@ async fn reconcile_placed(
     let cells = resolve_running_cells(supervisor, &cell_ids)
         .with_context(|| format!("verifying cells assigned to tenant '{name}' are running"))?;
 
+    // A placed tenant's cells are *expected* to already carry its
+    // collections, but that is not guaranteed, and assuming it is what made
+    // a recoverable state permanent (D44). A cell whose store came back
+    // empty (an archived pre-fold store, D42; a restored backup; a
+    // hand-cleared directory) has the tenant's collections missing, and
+    // wiring one that does not exist fails with "add schema before
+    // subscribing to P2P". Reconcile then marked the tenant degraded on
+    // every restart, forever, with nothing an operator could do about it
+    // short of recreating the tenant.
+    //
+    // Re-applying the tenant's own stored SDL closes that: it is the same
+    // schema the tenant was created with, and it is skipped entirely on a
+    // cell that already has every collection, so the healthy path costs one
+    // cheap local lookup per cell and nothing else.
+    for cell in &cells {
+        if schema_already_registered(&cell.node, &collections) {
+            continue;
+        }
+        tracing::warn!(
+            tenant = %name,
+            cell_id = %cell.spec.id,
+            "cell is missing this tenant's collections; re-applying the stored schema"
+        );
+        cell.node.add_schema(&sdl).await.with_context(|| {
+            format!(
+                "re-applying tenant '{name}'s schema on cell '{}'",
+                cell.spec.id
+            )
+        })?;
+    }
+
     ensure_group_connected(&cells, &collections)
         .await
         .with_context(|| format!("re-wiring group for tenant '{name}'"))?;

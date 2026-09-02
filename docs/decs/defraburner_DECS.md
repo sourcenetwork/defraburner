@@ -4,6 +4,286 @@ Plan: docs/plans/defraburner.md (approved 2026-08-18, loop to completion).
 Newest first. Every decision the loop takes is recorded here for operator
 review: what was decided, the options, why, what it affects, reversibility.
 
+## D44 (2026-09-01): a placed tenant re-applies its schema instead of staying degraded
+
+Found by booting the operator's real data root after archiving its
+pre-fold stores (D42): all three tenants came up `placed / degraded` with
+"collection 'Lazer' not found - add schema before subscribing to P2P", and
+every restart reproduced it. There was no operator action that could
+recover them short of recreating the tenant.
+
+- Cause: `reconcile_placed` loaded the tenant's stored SDL only to read
+  its collection *names*, then went straight to wiring. It assumed a
+  placed tenant's cells already carry its collections. That assumption is
+  true in the normal case and unrecoverable when it is false.
+- Options: (a) assume and fail, as before; (b) re-apply the tenant's
+  stored SDL on any cell missing its collections; (c) tear the tenant down
+  and re-place it.
+- Chosen: (b).
+- Why: the SDL is already loaded, already parsed, and is by definition the
+  schema this tenant was created with, so re-applying it is restoring the
+  intended state, not inventing one. The guard is the existing
+  `schema_already_registered`, so a healthy cell costs one local lookup
+  and nothing else. (c) would move a tenant's data-bearing placement over
+  a recoverable condition, which is far more destructive than the problem.
+- This is not specific to the pre-fold migration. Any cell whose store
+  comes back without the tenant's collections hits it: a restored backup,
+  a hand-cleared directory, a cell re-provisioned under a reused id.
+- Verified on the operator's real data root (a copy): 3 tenants degraded
+  before, 8 cells re-schema'd on the next start, 0 degraded after, and a
+  previously-dead tenant then wrote and read documents through its own
+  data plane.
+- Affects: burner-mesh `reconcile::reconcile_placed`.
+- Reversible: yes, but reverting restores a permanently-degraded state
+  with no operator recovery path.
+
+## D43 (2026-09-01): the red mesh detector was leaked test processes
+
+`cross_process_mesh_dials_static_peers`, kept red since August as the D20
+second-listener regression detector, now passes on three consecutive runs
+and inside the full suite (251/251).
+
+- What the failures actually showed: B's `connected_peers` never contained
+  A's *second* cell. The ports named in two separate failure messages
+  (`20270`, `32761`) were being held at that moment by leaked
+  `defraburner` processes from earlier runs of the same test, which picks
+  a random base port per run. The new B was connecting to a stale A from
+  a previous run rather than to its own.
+- So at least some of this project's "known upstream defect" evidence was
+  self-inflicted. That does not retroactively disprove D20, whose original
+  repro (docs/upstream/) stands on its own, but it does mean the detector
+  was not measuring what it claimed on those runs.
+- Recorded rather than resolved, deliberately: whether upstream's 274
+  commits fixed the listener lifetime has NOT been confirmed on a clean
+  host, and claiming a fix on the strength of three passes next to nine
+  leftover processes would be exactly the false green this project's
+  honesty fence exists to prevent. The README now states the ambiguity
+  instead of either old claim.
+- Operational lesson, worth more than the test result: leaked test
+  processes are not untidy, they corrupt results. Two were also bound to
+  9171-9179 against the operator's real data root, which is what produced
+  the "Unexpected peer ID at /ip4/127.0.0.1/tcp/9172" in a live run.
+- Affects: README's suite-count and detector paragraph.
+- Reversible: n/a; this is a finding, not a change in behaviour.
+
+## D42 (2026-09-01): a pre-fold data root fails loud instead of coming up empty
+
+Found by running against the operator's real data root: 12 cells each held
+a `data.lark` from before upstream's backend fold, and every one of them
+started anyway with an empty regolith store created beside it. Three
+tenants degraded with "collection 'Lazer' not found", which reads as data
+loss but was actually an unmigrated data root plus a silent failure.
+
+- Options: (a) migrate lark data to regolith on open; (b) refuse to ignite
+  a cell whose directory holds a retired backend's store; (c) leave it and
+  document the upgrade step.
+- Chosen: (b).
+- Why: (a) is not possible with any code that exists. Upstream deleted the
+  lark and redb backends outright, so nothing in the current tree can read
+  `data.lark`; a migrator would have to be built against a pre-fold
+  checkout of defradb.rs, which is a project of its own and not something
+  to fake. (c) is what was already happening, and it is precisely the
+  false-green the honesty fence forbids: the cluster reported healthy
+  cells while serving none of the data.
+- The guard never touches the legacy directory. The data is still there,
+  and the error exists to give an operator the chance to archive or
+  migrate it before anything overwrites it.
+- The error names the cell, the path, why regolith cannot read it, and
+  both fixes (archive the directory, or `just reset-data`). Three tests
+  cover it, including that a live regolith store's own files do not trip
+  it.
+- Affects: burner-cell `cell::open_store`.
+- Reversible: yes, but removing it would restore a silent-data-loss path.
+
+## D41 (2026-09-01): the autoscaler grows but does not shrink
+
+Operator direction: "autoscaler must not scale down ok? for this poc let
+it spawn more", plus a dashboard control to disable the autoscaler.
+
+- Options: (a) edit the `autoscale-default` policy package to stop
+  proposing scale_down; (b) veto scale_down in the Rust clamp; (c) leave
+  the behaviour and only add a UI toggle.
+- Chosen: (b), with the toggle.
+- Why: a policy proposes and the clamp decides, which is the trust
+  boundary this project already has. Editing the package would leave the
+  guardrail still authorizing removal, so any other policy (an override, a
+  future package) would shrink the cluster again. Vetoing in the clamp
+  makes the property hold for every policy, present and future.
+- Scale-down became data-destroying when fibers became cells (D40):
+  draining a cell now destroys the wasm database it owns. An automatic
+  removal is therefore a data-loss action taken with no operator in the
+  loop, which is not a trade worth making for a proof of concept.
+  Removal stays explicit: `DELETE /admin/cells/{id}`.
+- Default is off, and off is the direction a missing value drifts:
+  `#[serde(default)]` on a `bool` is `false`, so a manifest written before
+  the field existed also loads with removal disabled.
+- Both bools (`paused`, `scale_down_enabled`) are always written to the
+  manifest rather than omitted when false, so an operator reading
+  `cluster.json` sees the safety posture stated rather than inferred from
+  an absent key. A serialization test pins the exact shape.
+- The dashboard gained two switches: "disable the autoscaler" (the
+  existing pause, relabelled to say what it does) and "allow scale down",
+  which is off by default and says why in place.
+- Affects: burner-cell manifest/command, burner-policy clamp/autoscaler,
+  burner-gateway admin_autoscaler + overview, the Autoscaler view.
+- Reversible: yes, it is a knob; turning it on restores the prior
+  behaviour exactly.
+
+## D40 (2026-09-01): fibers are cells
+
+Operator direction, verbatim: "fibers = cells". A fiber is not a separate
+resource with its own ids and lifecycle; every cell owns exactly one wasm
+DefraDB, sharing the cell's id and lifetime.
+
+- What changed from D39: `/admin/fibers` (a parallel registry with its own
+  ignite/drain and arbitrary names) is gone. A cell's database is
+  addressed at `/admin/cells/{id}/db`, and there is no ignite or drain
+  there because `/admin/cells` already owns that lifecycle.
+- The fiber is spawned inside `cell::ignite` and dropped with the cell, so
+  there is no reachable state where a cell has a stale fiber or a fiber
+  outlives its cell. `FiberPool` was deleted rather than left unused: the
+  supervisor's own cell map is the pool, and a second ownership model for
+  the same objects is exactly the divergence the doctrine forbids.
+- A cell's database lives at `<data_root>/cells/<id>/fiber/`, nested
+  inside the cell rather than beside it, so removing a cell's directory
+  removes its database and cannot orphan one.
+- Verified live: a spawned cell answers on its database immediately with
+  no separate step; a drained cell's database is gone with it; and the
+  autoscaler scaling an idle cell down took that cell's database with it
+  without any fiber-specific code in the autoscaler, which is the whole
+  point of the unification.
+- Measured while building this, and corrected once observed properly
+  (honesty fence): regolith **does** lock, but only on native targets. A
+  native cell's store carries a `LOCK` file; the same store opened by the
+  wasm guest does not, because WASI preview1 has no `flock`. A second
+  fiber opened on a live directory therefore succeeds, which a second
+  native store would not.
+  So for fibers specifically the single-writer guarantee is structural,
+  not enforced by the store: one fiber per cell, a directory derived from
+  the cell id, and a manifest that already refuses a duplicate id. Two
+  tests pin this, and neither claims a guarantee the stack does not
+  provide on this target.
+- Not done here, and gated on the mesh bridge: tenant traffic still routes
+  to the cell's native embedded node, because a wasm database cannot
+  replicate (no sockets in WASI preview1). Routing tenants at fibers
+  before Phase 5 would silently downgrade every multi-replica tenant to a
+  single-node database.
+- Affects: burner-cell (cell/supervisor), burner-fiber (pool deleted),
+  burner-gateway admin_fibers, the dashboard Databases view,
+  console_coverage.
+- Reversible: yes, but there is no reason to: the unified model is
+  strictly simpler than the parallel one it replaced.
+
+## D39 (2026-09-01, SUPERSEDED by D40): fibers as a parallel admin surface
+
+`/admin/fibers` ignites, drives, and drains wasm DefraDB fibers. Tenant
+traffic still routes to native cells.
+
+- Superseded the same day: the operator's direction was "fibers = cells".
+  Kept here as history, not as current truth; D40 is what stands.
+- Options: (a) replace the cell backend outright, routing tenants at
+  fibers; (b) add a parallel fiber surface and migrate later; (c) a
+  per-cell engine knob threaded through the supervisor now.
+- Chosen at the time: (b).
+- Why: (a) is the plan's Phase 6 and is gated on the mesh bridge, which
+  does not exist: a fiber cannot replicate, so making it the tenant
+  backend today would silently downgrade every multi-replica tenant to a
+  single-node database. (c) spends supervisor and manifest churn on a
+  seam whose second implementation cannot yet pass parity. (b) ships the
+  whole fiber capability, operable from the dashboard, without touching
+  the path that serves real tenant traffic.
+- Fibers live under `<data_root>/fibers/<id>`, never `cells/<id>`, so a
+  fiber and a native cell of the same name cannot collide on one
+  directory. A unit test pins that.
+- Igniting is explicit, never implicit on first query: starting a
+  database is an operator action with a real cost, and doing it as a side
+  effect would hide it. A query to a fiber that is not running is a 404
+  naming the fix.
+- Affects: burner-fiber (new crate), burner-gateway admin_fibers, the
+  dashboard Fibers view, console_coverage (4 new enforced rows).
+- Reversible: yes; the surface is additive and nothing else depends on it.
+
+## D38 (2026-09-01): the fiber protocol is duplicated, and a test enforces it
+
+The wire protocol exists twice, in `crates/burner-fiber/src/protocol.rs`
+and `packages/defradb/source/protocol.rs`.
+
+- Options: (a) one shared crate both sides depend on; (b) two copies with
+  a drift test; (c) two copies, reviewed by hand.
+- Chosen: (b).
+- Why: (a) is impossible in practice. The guest is a separate cargo tree
+  built for wasm32-wasip1 with `db` in a configuration that does not
+  compile for the host at all, so a shared crate would have to be
+  target-generic across a boundary whose whole point is that the two
+  sides differ. (c) is how two copies rot. (b) keeps them honest
+  mechanically: `contract.rs` parses the guest's own source and fails if
+  an operation is added, renamed, or removed on one side only, if the
+  frame ceilings diverge, or if the guest's `DATA_DIR` stops matching the
+  host's preopen path. The parser asserts it found operations at all, so
+  a broken parser cannot make the test vacuously pass.
+- This is the doctrine's "two places that must agree call one function"
+  rule honored at the only level a wasm boundary allows: they cannot call
+  one function, so a test proves they agree.
+- Affects: crates/burner-fiber/src/contract.rs.
+- Reversible: n/a; the duplication is structural.
+
+## D37 (2026-09-01): the defradb fiber package is its own cargo tree
+
+`packages/defradb` declares an empty `[workspace]` table, so it resolves
+independently of the defraburner workspace, and it carries a copy of
+defradb.rs's own `Cargo.lock`.
+
+- Options: (a) join the defraburner workspace; (b) standalone workspace,
+  fresh resolution; (c) standalone workspace pinned to upstream's lockfile.
+- Chosen: (c).
+- Why: (a) is impossible, the package targets wasm32-wasip1 with
+  `panic = "abort"` and a size-first profile, and its `db` dependency has
+  `native` off, a configuration that does not compile for the host at all.
+  (b) was tried and failed: a fresh resolution picked socket2 0.6.5, which
+  `db` reaches unconditionally through reqwest and which does not build for
+  wasip1. Upstream's lock pins 0.5.10/0.6.3, the resolution the Phase 0
+  probe validated, so inheriting it is both the fix and the reproducibility
+  guarantee.
+- Affects: packages/defradb/Cargo.toml, packages/defradb/Cargo.lock.
+- Reversible: yes; re-resolving is a lockfile delete away, and would need
+  the socket2 problem solved another way.
+
+## D36 (2026-09-01): upstream folded every storage backend into regolith
+
+defradb.rs `0c8597b4` deleted the lark and redb backends. defraburner did
+not resolve against upstream main at all until this was ported.
+
+- Options for `BackendKind`: (a) keep three variants and map two onto one
+  engine; (b) collapse to `Regolith`/`Memory`, no compatibility; (c)
+  collapse, with `lark`/`redb` kept as deserialization aliases.
+- Chosen: (c).
+- Why: (a) keeps names for engines that no longer exist, which is a lie in
+  the manifest and on the dashboard. (b) fails a manifest that is merely
+  named for a retired engine, when the rename itself is trivially
+  recoverable. (c) loads the old name, writes the new one, so a manifest
+  migrates itself on first save. Aliases are read-only and covered by two
+  tests.
+- CORRECTION (2026-09-01, found by running against a real pre-fold data
+  root): the original text here claimed regolith "can in fact open that
+  directory". That was wrong, and the mistake mattered. The alias makes
+  the *manifest* load, but the *data* is written in lark's format, which
+  no current code can read: regolith finds nothing of its own and creates
+  an empty store beside the untouched `data.lark`, so the cell comes up
+  with zero collections and every tenant on it degrades with "collection
+  not found". The alias is still correct for what it does; it just never
+  migrated data and must not be read as if it did. D42 makes that state
+  fail loud instead of silent.
+- The D11 memory-budget derivation is preserved exactly: regolith exposes
+  the same `block_cache_size` and `write_buffer_size` knobs lark did, so a
+  cell's budget still lands in the same proportions. The redb-only
+  `redb_cache_bytes` derivation and its test went with the backend.
+- An in-memory cell is now `RegolithStore::in_memory` rather than a
+  separate engine, so it gains real transaction diagnostics, which the
+  retired `Memory` backend never reported.
+- Affects: burner-cell spec/cell/manifest/supervisor, every call site
+  naming a backend, the attribution test's four RSS cases.
+- Reversible: no; the retired backends do not exist upstream.
+
 ## D35 (2026-08-21): add collections to a live tenant
 
 Operator, using the console: "there is no collection selection or

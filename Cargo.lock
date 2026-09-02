@@ -963,6 +963,7 @@ name = "burner-cell"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "burner-fiber",
  "defra-http",
  "ed25519-dalek 2.2.0",
  "embedded",
@@ -992,6 +993,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "burner-fiber"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "burner-cell",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "wasmtime 44.0.3",
+ "wasmtime-wasi",
+ "zstd",
+]
+
+[[package]]
 name = "burner-gateway"
 version = "0.1.0"
 dependencies = [
@@ -999,6 +1017,7 @@ dependencies = [
  "axum",
  "burner-cell",
  "burner-dashboard",
+ "burner-fiber",
  "burner-mesh",
  "burner-policy",
  "defra-http",
@@ -1826,6 +1845,7 @@ name = "crdt"
 version = "0.5.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "defra-core",
  "serde",
  "serde_json",
@@ -1874,16 +1894,6 @@ version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "803d13fb3b09d88be9f4dbc29062c66b19bf7170867ceb746d2a8689bf6c7a26"
 dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-skiplist"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df29de440c58ca2cc6e587ec3d22347551a32435fbde9d2bff64e78a9ffa151b"
-dependencies = [
- "crossbeam-epoch",
  "crossbeam-utils",
 ]
 
@@ -2132,6 +2142,7 @@ version = "0.5.0"
 dependencies = [
  "async-lock",
  "async-trait",
+ "bytes",
  "cid",
  "storage",
  "thiserror 2.0.20",
@@ -2309,6 +2320,7 @@ dependencies = [
  "afterburner",
  "anyhow",
  "burner-cell",
+ "burner-fiber",
  "burner-gateway",
  "burner-mesh",
  "burner-policy",
@@ -4520,6 +4532,7 @@ dependencies = [
  "async-lock",
  "async-trait",
  "base64",
+ "bytes",
  "ciborium",
  "cid",
  "crypto",
@@ -4540,9 +4553,9 @@ dependencies = [
 
 [[package]]
 name = "kovan"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c140456f1fc2406f9218629ba654ae2f036a3e203eede77ef7ecd5342faecdc"
+checksum = "069314825b47e60f2882bf6fc90ab66e3eb37ee5e4407de6357a124842fc3b26"
 dependencies = [
  "once_cell",
  "portable-atomic",
@@ -4550,9 +4563,9 @@ dependencies = [
 
 [[package]]
 name = "kovan-channel"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7680bd3185bff7523acb534cd228db7072025510e56fc8917b453da00c0fd083"
+checksum = "0d105d382f56b3e8ece40ef1de7246205a419513333ac71e42832766240d8a47"
 dependencies = [
  "crossbeam-utils",
  "kovan",
@@ -4561,38 +4574,34 @@ dependencies = [
 
 [[package]]
 name = "kovan-map"
-version = "0.1.19"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b60bb6145728c18ed9e1f8aa87941d634a52ce4d30106f906ef33280e304d10"
+checksum = "aaba93d80fa57cdb3525198c0b61abeeb689ec0ac346b6d8da6a7c108bf608d4"
 dependencies = [
  "foldhash 0.2.0",
  "kovan",
 ]
 
 [[package]]
-name = "kovan-queue"
-version = "0.1.19"
+name = "kovan-mvcc"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f65d628b7fbb4bc0b6b82f3915c21f586f87bd4cbde9960fe69e21f07a52b089"
+checksum = "43bda37cfe1a4e6a1cf6737aaab3f601b0a245098beaa2c278630beadb8eec5b"
 dependencies = [
- "crossbeam-utils",
  "kovan",
+ "kovan-map",
+ "parking_lot 0.12.5",
+ "uuid",
 ]
 
 [[package]]
-name = "lark-kv"
-version = "0.1.0"
-source = "git+https://github.com/sourcenetwork/lark.git?rev=d1ec2e727bad6c160e6c1d71e2cbb163892b3a02#d1ec2e727bad6c160e6c1d71e2cbb163892b3a02"
+name = "kovan-queue"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1f72e2bdab247e2f7d53e41bcd2abd6a53daac69727511d1223abf41f0c9b7f"
 dependencies = [
- "crossbeam-skiplist",
- "lru 0.16.4",
- "lz4_flex",
- "parking_lot 0.12.5",
- "rustix 1.1.4",
- "snap",
- "thiserror 1.0.69",
- "tracing",
- "xxhash-rust",
+ "crossbeam-utils",
+ "kovan",
 ]
 
 [[package]]
@@ -6124,6 +6133,7 @@ dependencies = [
  "iroh-gossip",
  "iroh-tickets",
  "kms",
+ "kovan-map",
  "libp2p",
  "libp2p-stream",
  "lru 0.16.4",
@@ -6810,6 +6820,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bm25",
+ "bytes",
  "chrono",
  "ciborium",
  "cid",
@@ -7076,15 +7087,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redb"
-version = "2.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7156,6 +7158,30 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "regolith"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78ac133f988e47a96a6d9df82e22247b382cd92f785425377ca5b33a47d68b1"
+dependencies = [
+ "js-sys",
+ "kovan",
+ "kovan-channel",
+ "kovan-map",
+ "kovan-mvcc",
+ "kovan-queue",
+ "loom",
+ "lz4_flex",
+ "portable-atomic",
+ "rustix 1.1.4",
+ "snap",
+ "thiserror 1.0.69",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "xxhash-rust",
+]
 
 [[package]]
 name = "relative-path"
@@ -8182,16 +8208,17 @@ dependencies = [
  "async-lock",
  "async-trait",
  "bm25",
+ "bytes",
  "chrono",
  "cid",
  "crypto",
  "defra-core",
  "document",
+ "futures",
  "getrandom 0.2.17",
  "hex",
- "lark-kv",
  "parking_lot 0.12.5",
- "redb",
+ "regolith",
  "schema",
  "serde",
  "serde_json",

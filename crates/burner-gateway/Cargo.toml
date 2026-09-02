@@ -8,6 +8,9 @@ license.workspace = true
 [dependencies]
 burner-cell = { path = "../burner-cell" }
 burner-mesh = { path = "../burner-mesh" }
+# The wasm fiber runtime (docs/plans/defradb-wasm.md). One-directional:
+# burner-fiber does not depend on this crate.
+burner-fiber = { path = "../burner-fiber" }
 # Phase 4/D17: /admin/status reads the live policy-health status and the
 # decision-log tail. burner-policy does not depend on this crate, so this
 # edge is one-directional (no cycle).

@@ -112,6 +112,11 @@ the browser, no CLI or curl required.
 - **Tenants**: create a tenant with its schema, rotate its API token, set
   a per-tenant admission override, drop a tenant, or drop and retire it
   (also draining and erasing its cells).
+- **Databases**: every cell owns one persistent wasm DefraDB (the whole
+  engine compiled to `wasm32-wasip1`, loaded from the AOT-compiled
+  package). Apply schema to a cell's database and run queries or
+  mutations against it. Cells and their databases share a lifetime, so
+  they are ignited and drained in the Cluster view.
 - **Autoscaler**: change min/max cells, cooldown, and tick interval,
   pause or resume it, force an extra tick, and read the decision timeline.
 - **Data**: pick a tenant, add a collection to it while it is serving
@@ -137,7 +142,10 @@ connection state.
 
 - **`crates/burner-cell`** ([README](crates/burner-cell/README.md)): one
   governed DefraDB cell - spec, ignition, identity, the cluster manifest,
-  crash recovery.
+  crash recovery, and the wasm database each cell owns.
+- **`crates/burner-fiber`** ([README](crates/burner-fiber/README.md)):
+  loads the AOT-compiled `packages/defradb` `.afb` and runs one persistent
+  wasm DefraDB per cell.
 - **`crates/burner-mesh`** ([README](crates/burner-mesh/README.md)):
   tenant placement and replication wiring across cells.
 - **`crates/burner-gateway`** ([README](crates/burner-gateway/README.md)):
@@ -212,8 +220,17 @@ inbound dial from another process or host to cell 2 and beyond is not.
 Cross-host meshes should dial out from later-ignited cells toward earlier
 ones until this is fixed upstream. Full repro and detail:
 [`docs/upstream/defradb-rs-second-listener-dies.md`](docs/upstream/defradb-rs-second-listener-dies.md).
-It is why the test suite sits at 223/224: the one red test is kept
-deliberately, as the regression detector for the fix.
+As of 2026-09-01 the suite is 251/251 green, including that detector.
+That is a change from the 223/224 this README carried through August, and
+the reason is not yet fully established, so it is stated rather than
+claimed: the detector failed repeatedly earlier the same day and now
+passes on three consecutive runs. Every observed failure named ports that
+leaked `defraburner` processes from *previous runs of the same test* were
+still holding, so the new process connected to a stale peer instead of
+its intended one. Whether upstream's second-listener defect is also fixed
+by the 274 commits pulled in with the regolith upgrade has not been
+confirmed on a clean host; treat the detector as informative, not as
+proof the upstream bug is gone.
 
 Named deferred work - WASM-hosted cells, document-hash sharding,
 per-cell process isolation, automated live tenant migration, cross-host

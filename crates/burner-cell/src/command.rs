@@ -100,6 +100,9 @@ pub struct AutoscalerPatch {
     pub cooldown_secs: Option<u64>,
     pub tick_interval_secs: Option<u64>,
     pub paused: Option<bool>,
+    /// Whether the autoscaler may remove cells (D41). Absent leaves the
+    /// current setting alone; `false` is the shipped default.
+    pub scale_down_enabled: Option<bool>,
 }
 
 /// One admin mutation, enqueued by a gateway handler and carried out by

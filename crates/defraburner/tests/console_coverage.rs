@@ -31,6 +31,7 @@ const GATEWAY_RS: &str = include_str!("../../burner-gateway/src/gateway.rs");
 const ADMIN_CELLS_RS: &str = include_str!("../../burner-gateway/src/admin_cells.rs");
 const ADMIN_TENANTS_RS: &str = include_str!("../../burner-gateway/src/admin_tenants.rs");
 const ADMIN_AUTOSCALER_RS: &str = include_str!("../../burner-gateway/src/admin_autoscaler.rs");
+const ADMIN_FIBERS_RS: &str = include_str!("../../burner-gateway/src/admin_fibers.rs");
 
 fn router_source() -> String {
     [
@@ -38,6 +39,7 @@ fn router_source() -> String {
         ADMIN_CELLS_RS,
         ADMIN_TENANTS_RS,
         ADMIN_AUTOSCALER_RS,
+        ADMIN_FIBERS_RS,
     ]
     .concat()
 }
@@ -63,6 +65,10 @@ const DASHBOARD_JS_FILES: &[(&str, &str)] = &[
     (
         "view-cells.js",
         include_str!("../../burner-dashboard/assets/view-cells.js"),
+    ),
+    (
+        "view-fibers.js",
+        include_str!("../../burner-dashboard/assets/view-fibers.js"),
     ),
     (
         "view-tenants.js",
@@ -220,6 +226,48 @@ fn make_disposable_cell(ctx: &ProbeCtx) -> String {
 }
 
 // ===== Probes (check c) =================================================
+
+/// A cell's wasm database, exercised end to end against the live binary.
+///
+/// Addressed by cell id, because a fiber is not a separate resource with
+/// its own lifecycle (D40): the fixture cell already exists, so there is
+/// nothing to ignite here.
+///
+/// A tree where `just package-defradb` has not been run answers 503 from
+/// each of these, which is a legitimate outcome the table accepts: the
+/// package is a build output, not source. Only 404/405 (not mounted)
+/// fails the check.
+fn probe_cell_db_collections(ctx: &ProbeCtx) -> u16 {
+    get(
+        &format!("{}/admin/cells/{}/db", ctx.base_url, ctx.fixture_cell_id),
+        &ctx.admin_token,
+    )
+}
+
+fn probe_cell_db_schema(ctx: &ProbeCtx) -> u16 {
+    let (status, _) = post_json(
+        &format!(
+            "{}/admin/cells/{}/db/schema",
+            ctx.base_url, ctx.fixture_cell_id
+        ),
+        &ctx.admin_token,
+        serde_json::json!({ "sdl": "type CoverageWidget { name: String }" }),
+    );
+    status
+}
+
+fn probe_cell_db_query(ctx: &ProbeCtx) -> u16 {
+    probe_cell_db_schema(ctx);
+    let (status, _) = post_json(
+        &format!(
+            "{}/admin/cells/{}/db/query",
+            ctx.base_url, ctx.fixture_cell_id
+        ),
+        &ctx.admin_token,
+        serde_json::json!({ "graphql": "{ CoverageWidget { name } }" }),
+    );
+    status
+}
 
 fn probe_cells_spawn(ctx: &ProbeCtx) -> u16 {
     let (status, _) = post_json(
@@ -456,6 +504,24 @@ fn probe_tenant_data_plane_graphql(ctx: &ProbeCtx) -> u16 {
 // ===== The table =========================================================
 
 const TABLE: &[Row] = &[
+    Row {
+        path_pattern: "/admin/cells/{id}/db",
+        js_marker: "data-fiber-engine",
+        human_name: "cell database: collections",
+        probe: probe_cell_db_collections,
+    },
+    Row {
+        path_pattern: "/admin/cells/{id}/db/schema",
+        js_marker: "fibers-schema-apply",
+        human_name: "cell database: apply schema",
+        probe: probe_cell_db_schema,
+    },
+    Row {
+        path_pattern: "/admin/cells/{id}/db/query",
+        js_marker: "fibers-query-run",
+        human_name: "cell database: query and mutate",
+        probe: probe_cell_db_query,
+    },
     Row {
         path_pattern: "/admin/cells",
         js_marker: "cells-spawn",

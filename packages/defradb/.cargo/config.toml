@@ -1,0 +1,10 @@
+# `cargo test --target wasm32-wasip1` needs a runner, because the artifact
+# is a wasm module, not a host binary. wasmtime is already required to run
+# this package at all, so it is not a new dependency.
+#
+# This is the only way to test this package honestly: `db` without its
+# `native` feature is a wasm-only configuration (its `tokio::spawn` calls
+# are `cfg(not(target_arch = "wasm32"))`), so a host-target `cargo test`
+# cannot even compile it. Testing on the real target is the point.
+[target.wasm32-wasip1]
+runner = "wasmtime run --dir=.::/data --"

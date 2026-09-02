@@ -39,6 +39,15 @@ const MARKER_KEY: &[u8] = b"__defraburner_cell_marker__";
 pub struct Supervisor {
     data_root: PathBuf,
     cells: HashMap<String, CellEntry>,
+    /// The compiled wasm DefraDB image every cell's fiber instantiates
+    /// from (D40). Compiled once for the process, since it is identical
+    /// for every cell and compiling ~5 MiB of wasm per cell would be the
+    /// dominant cost of igniting one.
+    ///
+    /// `None` when `packages/defradb` has not been built; cells then
+    /// ignite without a fiber rather than failing, and the reason is
+    /// reported by the caller that could not load it.
+    fiber_image: Option<burner_fiber::FiberImage>,
     /// `(cell_id, collection, peer_id)` triples this process has already
     /// confirmed joined the collection's gossipsub topic (bug-fix round,
     /// D25 addendum): `burner_mesh::wire_group` only *waits* on the
@@ -92,7 +101,35 @@ impl Supervisor {
             data_root: data_root.into(),
             cells: HashMap::new(),
             confirmed_topic_joins: std::collections::HashSet::new(),
+            fiber_image: None,
         }
+    }
+
+    /// Gives every cell this supervisor ignites a wasm database.
+    ///
+    /// A builder method rather than a `new` parameter so the many callers
+    /// that do not care about fibers (tests, tooling) are untouched.
+    pub fn with_fiber_image(mut self, image: burner_fiber::FiberImage) -> Self {
+        self.fiber_image = Some(image);
+        self
+    }
+
+    /// Whether cells ignited by this supervisor get a wasm database.
+    pub fn has_fiber_image(&self) -> bool {
+        self.fiber_image.is_some()
+    }
+
+    /// The running fiber for `cell_id`, if that cell is running and has one.
+    pub fn cell_fiber(
+        &self,
+        cell_id: &str,
+    ) -> Option<std::sync::Arc<tokio::sync::Mutex<burner_fiber::Fiber>>> {
+        self.cells
+            .get(cell_id)?
+            .running
+            .fiber
+            .as_ref()
+            .map(std::sync::Arc::clone)
     }
 
     pub fn data_root(&self) -> &Path {
@@ -134,7 +171,7 @@ impl Supervisor {
             .await
             .with_context(|| format!("saving cluster manifest after provisioning '{}'", spec.id))?;
 
-        let running = cell::ignite(&self.data_root, spec.clone())
+        let running = cell::ignite(&self.data_root, spec.clone(), self.fiber_image.as_ref())
             .await
             .with_context(|| format!("igniting newly provisioned cell '{}'", spec.id))?;
 
@@ -274,6 +311,17 @@ impl Supervisor {
     /// honestly via `marker_ok = false` in [`Supervisor::status`], not
     /// hidden.
     pub async fn recover(data_root: impl Into<PathBuf>) -> Result<Self> {
+        Self::recover_with_fiber_image(data_root, None).await
+    }
+
+    /// Recovery that also gives every recovered cell its wasm database.
+    ///
+    /// A separate entry point rather than a parameter on [`Self::recover`]
+    /// so existing callers (tests, tooling) keep the simpler signature.
+    pub async fn recover_with_fiber_image(
+        data_root: impl Into<PathBuf>,
+        fiber_image: Option<burner_fiber::FiberImage>,
+    ) -> Result<Self> {
         let data_root = data_root.into();
         let manifest = ClusterManifest::load(&data_root)
             .await
@@ -285,12 +333,20 @@ impl Supervisor {
         // task via `buffer_unordered` rather than spawning each onto its
         // own task.
         let ignition_data_root = data_root.clone();
+        // Cloned per ignition rather than borrowed: `FiberImage` is two
+        // internally-shared wasmtime handles, so this is a refcount bump,
+        // not a second copy of the compiled module.
+        let ignition_fiber_image = fiber_image.clone();
         let mut ignitions = stream::iter(manifest.cells)
             .map(move |spec| {
                 let data_root = ignition_data_root.clone();
+                let fiber_image = ignition_fiber_image.clone();
                 async move {
                     let id = spec.id.clone();
-                    (id, ignite_and_verify(&data_root, spec).await)
+                    (
+                        id,
+                        ignite_and_verify(&data_root, spec, fiber_image.as_ref()).await,
+                    )
                 }
             })
             .buffer_unordered(RECOVERY_CONCURRENCY);
@@ -305,6 +361,7 @@ impl Supervisor {
             data_root,
             cells,
             confirmed_topic_joins: std::collections::HashSet::new(),
+            fiber_image,
         })
     }
 
@@ -320,7 +377,7 @@ impl Supervisor {
 
         self.drain(id).await?;
 
-        let running = cell::ignite(&self.data_root, spec.clone())
+        let running = cell::ignite(&self.data_root, spec.clone(), self.fiber_image.as_ref())
             .await
             .with_context(|| format!("re-igniting cell '{id}'"))?;
         let marker_ok = verify_marker(&running.node, &spec.id)
@@ -483,9 +540,13 @@ async fn load_or_new_manifest(data_root: &Path) -> Result<ClusterManifest> {
     }
 }
 
-async fn ignite_and_verify(data_root: &Path, spec: CellSpec) -> Result<CellEntry> {
+async fn ignite_and_verify(
+    data_root: &Path,
+    spec: CellSpec,
+    fiber_image: Option<&burner_fiber::FiberImage>,
+) -> Result<CellEntry> {
     let id = spec.id.clone();
-    let running = cell::ignite(data_root, spec)
+    let running = cell::ignite(data_root, spec, fiber_image)
         .await
         .with_context(|| format!("igniting cell '{id}' during recovery"))?;
     let marker_ok = verify_marker(&running.node, &id)
@@ -551,7 +612,7 @@ pub(crate) async fn verify_marker(
     drop(txn);
 
     match stored {
-        Some(value) => Ok(value.as_slice() == cell_id.as_bytes()),
+        Some(value) => Ok(value.as_ref() == cell_id.as_bytes()),
         None => {
             tracing::warn!(
                 cell_id,
@@ -568,11 +629,11 @@ mod tests {
     use super::*;
     use crate::spec::DEFAULT_MEM_BUDGET_BYTES;
 
-    fn lark_spec(data_root: &Path, id: &str, port: u16) -> CellSpec {
+    fn regolith_spec(data_root: &Path, id: &str, port: u16) -> CellSpec {
         CellSpec {
             id: id.to_string(),
             group: "default".to_string(),
-            backend: BackendKind::Lark,
+            backend: BackendKind::Regolith,
             p2p_port: port,
             bind_addr: "127.0.0.1".parse().unwrap(),
             mem_budget_bytes: DEFAULT_MEM_BUDGET_BYTES,
@@ -594,7 +655,7 @@ mod tests {
 
         let mut supervisor = Supervisor::new(&data_root);
         supervisor
-            .provision(lark_spec(&data_root, "cell-0", port))
+            .provision(regolith_spec(&data_root, "cell-0", port))
             .await
             .expect("provision should succeed");
 
@@ -638,12 +699,12 @@ mod tests {
 
         let mut supervisor = Supervisor::new(&data_root);
         supervisor
-            .provision(lark_spec(&data_root, "cell-0", port_a))
+            .provision(regolith_spec(&data_root, "cell-0", port_a))
             .await
             .unwrap();
 
         let error = supervisor
-            .provision(lark_spec(&data_root, "cell-0", port_b))
+            .provision(regolith_spec(&data_root, "cell-0", port_b))
             .await
             .unwrap_err();
         assert!(error.to_string().contains("already provisioned"));
@@ -659,7 +720,7 @@ mod tests {
 
         let mut supervisor = Supervisor::new(&data_root);
         supervisor
-            .provision(lark_spec(&data_root, "cell-0", port))
+            .provision(regolith_spec(&data_root, "cell-0", port))
             .await
             .expect("provision should succeed");
         let key_file = crate::identity::key_path(&data_root, "cell-0");
@@ -694,7 +755,7 @@ mod tests {
 
         let mut supervisor = Supervisor::new(&data_root);
         supervisor
-            .provision(lark_spec(&data_root, "cell-0", port))
+            .provision(regolith_spec(&data_root, "cell-0", port))
             .await
             .expect("provision should succeed");
         let data_dir = cell::cell_data_dir(&data_root, "cell-0");
@@ -719,7 +780,7 @@ mod tests {
 
         let mut supervisor = Supervisor::new(&data_root);
         supervisor
-            .provision(lark_spec(&data_root, "cell-0", port))
+            .provision(regolith_spec(&data_root, "cell-0", port))
             .await
             .unwrap();
 

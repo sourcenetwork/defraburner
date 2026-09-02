@@ -9,9 +9,12 @@ license.workspace = true
 burner-cell = { path = "../burner-cell" }
 burner-mesh = { path = "../burner-mesh" }
 burner-gateway = { path = "../burner-gateway" }
+# `FiberImage` is named directly when loading the wasm database package
+# and handing it to the supervisor (D40).
+burner-fiber = { path = "../burner-fiber" }
 burner-policy = { path = "../burner-policy" }
 embedded = { path = "../../../defradb.rs/crates/embedded", features = ["iroh"] }
-storage = { path = "../../../defradb.rs/crates/storage", features = ["lark"] }
+storage = { path = "../../../defradb.rs/crates/storage" }
 query = { path = "../../../defradb.rs/crates/query" }
 # Not in the original dep list: embedded's ManagedP2PSystem::ops() returns
 # Arc<dyn defra_http::P2POperations>, so calling its trait methods (

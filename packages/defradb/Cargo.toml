@@ -1,0 +1,48 @@
+# Its own workspace, deliberately: this package targets wasm32-wasip1 with a
+# size-first profile and a dependency set that excludes everything native
+# (no libp2p, no tokio), none of which the defraburner workspace wants
+# unified into its own resolution. `burn compile` builds it standalone.
+[workspace]
+
+[package]
+name = "defradb-fiber"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+license = "Apache-2.0 OR MIT"
+publish = false
+
+# `burn compile` builds this with
+# `cargo build --release --target wasm32-wasip1` and expects exactly one
+# .wasm output, so this package declares one binary and no library.
+[[bin]]
+name = "defradb-fiber"
+path = "source/main.rs"
+
+[dependencies]
+# The DefraDB engine, from the sibling checkout, with every default
+# feature off: `native` pulls tokio features wasm forbids and `p2p` pulls
+# libp2p, neither of which can exist on wasm32-wasip1. What remains is the
+# whole data plane (collections, CRDT merge, indexes, transactions).
+db = { path = "../../../defradb.rs/crates/db", default-features = false }
+# The only storage engine upstream still ships, and the reason this
+# package can persist at all: regolith targets wasm32-wasip1 and writes a
+# real WAL/SST tree through WASI.
+storage = { path = "../../../defradb.rs/crates/storage" }
+query = { path = "../../../defradb.rs/crates/query" }
+schema = { path = "../../../defradb.rs/crates/schema" }
+events = { path = "../../../defradb.rs/crates/events", features = ["channel"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# No tokio: wasm32-wasip1 has no I/O driver and no threads. The engine's
+# futures are driven by a single-threaded block_on, which is exactly the
+# execution model regolith documents for this target.
+futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

@@ -43,7 +43,7 @@ use crate::admission::{Admission, Decision};
 use crate::auth;
 use crate::routing::RoutingTable;
 use crate::sse;
-use crate::{admin_autoscaler, admin_cells, admin_tenants};
+use crate::{admin_autoscaler, admin_cells, admin_fibers, admin_tenants};
 
 /// Default gateway listen address.
 pub const DEFAULT_GATEWAY_ADDR: &str = "127.0.0.1:9181";
@@ -261,6 +261,13 @@ pub(crate) struct GatewayState {
     /// startup-time config knob, not something admin commands change
     /// live).
     pub(crate) static_peer_outcomes: Arc<Vec<burner_mesh::PeerDialOutcome>>,
+    /// Why cells have no wasm database, when they do not (D40).
+    ///
+    /// The fibers themselves live on the supervisor, one per cell; this is
+    /// only the explanation for their absence, so `/admin/cells/{id}/db`
+    /// and the dashboard can say *why* instead of reporting a bare
+    /// "not found" that reads as a missing cell.
+    pub(crate) fiber_unavailable_reason: Option<String>,
 }
 
 /// Runs the gateway listener until the process is torn down (this future
@@ -295,6 +302,7 @@ pub async fn build(
     command_tx: mpsc::Sender<burner_cell::SupervisorCommand>,
     runtime_info: RuntimeInfo,
     static_peer_outcomes: Vec<burner_mesh::PeerDialOutcome>,
+    fiber_unavailable_reason: Option<String>,
 ) -> Result<(
     tokio::net::TcpListener,
     Router,
@@ -332,6 +340,7 @@ pub async fn build(
         command_tx,
         runtime_info: Arc::new(runtime_info),
         static_peer_outcomes: Arc::new(static_peer_outcomes),
+        fiber_unavailable_reason,
     };
 
     // Safe to `tokio::spawn` (D12): only ever reads supervisor/manifest/
@@ -349,6 +358,7 @@ pub async fn build(
         .merge(admin_tenants::router())
         .merge(admin_cells::router())
         .merge(admin_autoscaler::router())
+        .merge(admin_fibers::router())
         .merge(burner_dashboard::router())
         .fallback(route_to_tenant)
         .with_state(state);
@@ -552,6 +562,7 @@ struct AutoscalerControlView {
     cooldown_secs: u64,
     tick_interval_secs: u64,
     paused: bool,
+    scale_down_enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -640,6 +651,7 @@ async fn gather_overview(state: &GatewayState) -> Result<AdminStatusResponse> {
         cooldown_secs: effective.cooldown_secs,
         tick_interval_secs: effective.tick_interval.as_secs(),
         paused: state.autoscaler_control.is_paused().await,
+        scale_down_enabled: effective.scale_down_enabled,
     };
 
     Ok(AdminStatusResponse {
@@ -903,6 +915,7 @@ pub(crate) mod test_support {
         let (command_tx, command_rx) = mpsc::channel(burner_cell::COMMAND_CHANNEL_CAPACITY);
         let control = AutoscalerControl::new(
             burner_policy::autoscaler::AutoscalerConfig {
+                scale_down_enabled: false,
                 min_cells: 1,
                 max_cells: 8,
                 cooldown_secs: 60,
@@ -932,6 +945,11 @@ pub(crate) mod test_support {
                 registered_packages: Vec::new(),
             }),
             static_peer_outcomes: Arc::new(Vec::new()),
+            // Test supervisors carry no wasm image: these tests exercise
+            // the gateway's own routing and auth, and compiling a 5 MiB
+            // module per test would buy nothing. The reason string is what
+            // `/admin/cells/{id}/db` reports in that state.
+            fiber_unavailable_reason: Some("no fiber package in tests".to_string()),
         };
         (state, command_rx)
     }
